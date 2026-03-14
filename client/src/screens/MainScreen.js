@@ -24,6 +24,7 @@ export default function MainScreen({
   activeFlashTargets,
   onSendChat,
   onDropBeacon,
+  onRemoveBeacon,
   onUpdateMySupplies,
   onFlashlightPing,
   onStopFlashlight,
@@ -295,6 +296,24 @@ export default function MainScreen({
               <View style={styles.supplyMarkerOuter}>
                 <Text style={styles.supplyMarkerEmoji}>📦</Text>
               </View>
+              {isRescuer ? (
+                <Callout
+                  tooltip={true}
+                  onPress={() => {
+                    if (!b.beacon_id) return;
+                    onRemoveBeacon?.(b.beacon_id);
+                  }}
+                >
+                  <View style={styles.customCallout}>
+                    <Text style={styles.calloutTitle}>Supply Beacon</Text>
+                    <Text style={styles.calloutDesc}>
+                      {b.quantity ? `Qty ${b.quantity} • ` : ""}
+                      {b.note || "Supplies dropped here"}
+                    </Text>
+                    <Text style={styles.calloutAction}>Tap to remove</Text>
+                  </View>
+                </Callout>
+              ) : null}
             </Marker>
           ))}
 

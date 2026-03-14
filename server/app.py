@@ -428,6 +428,8 @@ def on_drop_beacon(data):
     supply_type = str(data.get("supply_type", "Mixed Supplies")).strip() or "Mixed Supplies"
     quantity = str(data.get("quantity", "")).strip()
     note = str(data.get("note", "Supplies dropped here")).strip() or "Supplies dropped here"
+    rescuer_id = data.get("rescuer_id")
+    rescuer = users_by_id.get(rescuer_id)
 
     beacon = {
         "beacon_id": beacon_id,
@@ -436,11 +438,23 @@ def on_drop_beacon(data):
         "supply_type": supply_type,
         "quantity": quantity,
         "note": note,
-        "dropped_by": data.get("rescuer_id"),
+        "dropped_by": rescuer_id,
         "ts": int(time.time()),
     }
     beacons[beacon_id] = beacon
     socketio.emit("beacon_dropped", beacon)
+
+    quantity_text = f" ({quantity})" if quantity else ""
+    message = {
+        "from_user_id": rescuer_id,
+        "from_user_name": rescuer.get("name", "Rescuer") if rescuer else "Rescuer",
+        "to_user_id": "all",
+        "to_user_name": "All Nodes",
+        "text": f"Supply beacon dropped: {supply_type}{quantity_text}. {note}",
+        "ts": int(time.time()),
+        "is_broadcast": True,
+    }
+    socketio.emit("chat_message", message)
 
 
 @socketio.on("remove_beacon")
