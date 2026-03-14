@@ -32,6 +32,17 @@ export default function MainScreen({
     return typeof lat === "number" && typeof lon === "number";
   }
 
+  function stringToColor(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    return "#" + "00000".substring(0, 6 - c.length) + c;
+  }
+
+  const selectedUserObj = useMemo(() => users.find((u) => u.user_id === selectedUserId), [users, selectedUserId]);
+
   const others = useMemo(() => users.filter((u) => u.user_id !== me.user_id), [users, me.user_id]);
   const usersById = useMemo(() => {
     const map = {};
@@ -44,7 +55,7 @@ export default function MainScreen({
   const displayUsersById = useMemo(() => {
     const validUsers = users.filter((u) => isValidCoord(u.lat, u.lon));
     const groupedByCoord = validUsers.reduce((acc, user) => {
-      const key = `${user.lat.toFixed(6)},${user.lon.toFixed(6)}`;
+      const key = `${user.lat.toFixed(5)},${user.lon.toFixed(5)}`;
       if (!acc[key]) acc[key] = [];
       acc[key].push(user);
       return acc;
@@ -52,13 +63,16 @@ export default function MainScreen({
 
     const map = {};
     Object.values(groupedByCoord).forEach((group) => {
+      // Sort by user_id to ensure stable indices. This prevents the "dancing" / spinning markers.
+      group.sort((a, b) => a.user_id.localeCompare(b.user_id));
+
       if (group.length === 1) {
         const only = group[0];
         map[only.user_id] = only;
         return;
       }
 
-      const radius = 0.00012;
+      const radius = 0.00015;
       group.forEach((user, index) => {
         const angle = (2 * Math.PI * index) / group.length;
         map[user.user_id] = {
@@ -104,21 +118,48 @@ export default function MainScreen({
       >
         {users
           .filter((u) => isValidCoord(u.lat, u.lon))
-          .map((u) => (
-            (() => {
-              const displayUser = displayUsersById[u.user_id] || u;
-              return (
-            <Marker
-              key={u.user_id}
-              coordinate={{ latitude: displayUser.lat, longitude: displayUser.lon }}
-              title={u.name}
-              description={`${u.role}${u.arrived ? " • safe" : ""}`}
-              pinColor={u.role === "rescuer" ? "#b45309" : "#dc2626"}
-              onPress={() => setSelectedUserId(u.user_id)}
-            />
-              );
-            })()
-          ))}
+          .map((u) => {
+            const displayUser = displayUsersById[u.user_id] || u;
+            const isMe = me && u.user_id === me.user_id;
+
+            const baseColor =
+              u.role === "rescuer" ? "#ea580c" : stringToColor(u.user_id || u.name || "");
+            const markerColor = isMe ? "rgba(37, 99, 235, 0.4)" : baseColor;
+            const size = isMe ? 36 : 28;
+
+            return (
+              <Marker
+                key={u.user_id}
+                coordinate={{ latitude: displayUser.lat, longitude: displayUser.lon }}
+                title={isMe ? `${u.name} (You)` : u.name}
+                description={`${u.role}${u.arrived ? " • safe" : ""}`}
+                onPress={() => setSelectedUserId(u.user_id)}
+                zIndex={isMe ? 999 : 1}
+                tracksViewChanges={false}
+              >
+                <View
+                  style={{
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    backgroundColor: markerColor,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderWidth: 2,
+                    borderColor: "white",
+                  }}
+                >
+                  {isMe ? (
+                    <View style={styles.myLocationDotInner} />
+                  ) : (
+                    <Text style={{ color: "white", fontWeight: "bold", fontSize: 12 }}>
+                      {u.name ? u.name.charAt(0).toUpperCase() : "?"}
+                    </Text>
+                  )}
+                </View>
+              </Marker>
+            );
+          })}
 
         {chatLinks
           .map((link) => {
@@ -164,13 +205,13 @@ export default function MainScreen({
       </MapView>
 
       <View style={styles.topStrip}>
-        <Text style={styles.title}>{me.role === "rescuer" ? "Rescuer Map" : "Survivor Map"}</Text>
-        <Text style={styles.meta}>Users: {users.length} • Links: {chatLinks.length} • Beacons: {beacons.length}</Text>
+        <Text style={styles.title}>{me?.role === "rescuer" ? "Rescuer Map" : "Survivor Map"}</Text>
+        <Text style={styles.meta}>Users: {users.length} ({users.filter(u => isValidCoord(u.lat, u.lon)).length} on map) • Links: {chatLinks.length} • Beacons: {beacons.length}</Text>
       </View>
 
       <View style={styles.bottomPanel}>
         <Text style={styles.panelTitle}>
-          Selected: {selectedUserId ? selectedUserId.slice(0, 8) : "none"}
+          Selected: {selectedUserObj ? selectedUserObj.name : "none"}
         </Text>
 
         {selectedUserId ? (
@@ -387,5 +428,21 @@ const styles = StyleSheet.create({
   btnMutedText: {
     color: "#9a3412",
     fontWeight: "700",
+  },
+  myLocationDotOuter: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(37, 99, 235, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  myLocationDotInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#2563eb",
+    borderWidth: 2,
+    borderColor: "white",
   },
 });
