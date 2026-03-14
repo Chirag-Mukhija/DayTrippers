@@ -1,7 +1,16 @@
 import React, { useMemo, useState } from "react";
-import { FlatList, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  FlatList,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { WebView } from "react-native-webview";
 import { OFFLINE_WIKI_ARTICLES } from "../data/offlineWiki";
+import { COLORS, FONTS, RADIUS, SPACING } from "../theme";
 
 export default function OfflineGuidesScreen({ onBack }) {
   const [query, setQuery] = useState("");
@@ -11,13 +20,17 @@ export default function OfflineGuidesScreen({ onBack }) {
     const q = query.trim().toLowerCase();
     if (!q) return OFFLINE_WIKI_ARTICLES;
     return OFFLINE_WIKI_ARTICLES.filter((a) =>
-      (`${a.title} ${a.summary} ${a.keywords}`).toLowerCase().includes(q)
+      `${a.title} ${a.summary} ${a.keywords}`.toLowerCase().includes(q)
     );
   }, [query]);
 
   function wikiArticleToHtml(article) {
-    const escapedTitle = article.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const escapedSummary = article.summary.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escapedTitle = article.title
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    const escapedSummary = article.summary
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
     const sectionsHtml = article.sections
       .map(
         (section) => `
@@ -40,44 +53,47 @@ export default function OfflineGuidesScreen({ onBack }) {
           body {
             margin: 0;
             padding: 18px 16px 28px;
-            background: #f8fafc;
-            color: #0f172a;
+            background: #0A0A0F;
+            color: #F0F0F5;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            line-height: 1.55;
+            line-height: 1.6;
           }
           header {
-            background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
-            border: 1px solid #bae6fd;
-            border-radius: 14px;
-            padding: 14px;
-            margin-bottom: 14px;
+            background: #12121A;
+            border: 1px solid #2A2A3A;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
           }
           h1 {
-            font-size: 26px;
+            font-size: 22px;
             margin: 0 0 8px;
-            color: #0c4a6e;
+            color: #FF4B4B;
+            letter-spacing: 1px;
           }
           .summary {
             margin: 0;
-            color: #334155;
-            font-size: 15px;
+            color: #8B8B9E;
+            font-size: 14px;
           }
           section {
-            background: white;
-            border: 1px solid #e2e8f0;
+            background: #1A1A24;
+            border: 1px solid #2A2A3A;
             border-radius: 12px;
-            padding: 12px;
+            padding: 14px;
             margin-bottom: 10px;
           }
           h2 {
             margin: 0 0 8px;
-            color: #0f172a;
-            font-size: 18px;
+            color: #F0F0F5;
+            font-size: 16px;
+            letter-spacing: 0.5px;
           }
           p {
             margin: 0;
-            color: #334155;
-            font-size: 15px;
+            color: #8B8B9E;
+            font-size: 14px;
+            line-height: 1.5;
           }
         </style>
       </head>
@@ -95,14 +111,21 @@ export default function OfflineGuidesScreen({ onBack }) {
   if (selectedWikiArticle) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.readerTitle}>{selectedWikiArticle.title}</Text>
+        <View style={styles.readerHeader}>
+          <Text style={styles.readerTitle}>
+            {selectedWikiArticle.title.toUpperCase()}
+          </Text>
+        </View>
         <WebView
           source={{ html: wikiArticleToHtml(selectedWikiArticle) }}
           style={styles.webview}
           originWhitelist={["*"]}
         />
-        <Pressable style={styles.backBtnSecondary} onPress={() => setSelectedWikiArticle(null)}>
-          <Text style={styles.backText}>Back To Wikipedia</Text>
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => setSelectedWikiArticle(null)}
+        >
+          <Text style={styles.backText}>← BACK TO KNOWLEDGE BASE</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -110,28 +133,38 @@ export default function OfflineGuidesScreen({ onBack }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Hero */}
       <View style={styles.heroCard}>
-        <Text style={styles.heroBadge}>OFFLINE READY</Text>
-        <Text style={styles.title}>Offline Knowledge Base</Text>
-        <Text style={styles.subtitle}>
-          Search encyclopedia-style survival, medical, navigation, and fieldcraft topics without internet.
+        <View style={styles.heroBadgeRow}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>OFFLINE READY</Text>
+          </View>
+        </View>
+        <Text style={styles.heroTitle}>KNOWLEDGE BASE</Text>
+        <Text style={styles.heroSubtitle}>
+          Search survival, medical, navigation, and fieldcraft topics
+          without internet connection.
         </Text>
       </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Search offline topics"
-        value={query}
-        onChangeText={setQuery}
-      />
-
-      <View style={styles.wikiNoteCard}>
-        <Text style={styles.wikiNoteTitle}>Offline Wikipedia</Text>
-        <Text style={styles.wikiNoteText}>
-          Disaster, medical, fieldcraft, navigation, communication, and practical survival topics are bundled locally for fully offline search.
-        </Text>
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="SEARCH TOPICS..."
+          placeholderTextColor={COLORS.TEXT_MUTED}
+          value={query}
+          onChangeText={setQuery}
+        />
       </View>
 
+      {/* Results count */}
+      <Text style={styles.resultCount}>
+        {filteredWiki.length} ARTICLES FOUND
+      </Text>
+
+      {/* List */}
       <FlatList
         data={filteredWiki}
         keyExtractor={(item) => item.id}
@@ -142,13 +175,17 @@ export default function OfflineGuidesScreen({ onBack }) {
             onPress={() => setSelectedWikiArticle(item)}
           >
             <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardDesc}>{item.summary}</Text>
+            <Text style={styles.cardDesc} numberOfLines={2}>
+              {item.summary}
+            </Text>
+            <Text style={styles.cardArrow}>READ →</Text>
           </Pressable>
         )}
       />
 
+      {/* Back */}
       <Pressable style={styles.backBtnPrimary} onPress={onBack}>
-        <Text style={styles.backText}>Back To Session</Text>
+        <Text style={styles.backText}>← BACK TO SESSION</Text>
       </Pressable>
     </SafeAreaView>
   );
@@ -157,115 +194,158 @@ export default function OfflineGuidesScreen({ onBack }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: "#eef2ff",
+    padding: SPACING.LG,
+    backgroundColor: COLORS.DARK_BG,
   },
+
+  // Hero
   heroCard: {
-    backgroundColor: "#0f172a",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: COLORS.SURFACE,
+    borderRadius: RADIUS.LG,
+    padding: SPACING.LG,
+    marginBottom: SPACING.MD,
     borderWidth: 1,
-    borderColor: "#1e293b",
+    borderColor: COLORS.CARD_BORDER,
+  },
+  heroBadgeRow: {
+    flexDirection: "row",
+    marginBottom: 10,
   },
   heroBadge: {
-    color: "#93c5fd",
+    backgroundColor: COLORS.NEON_GREEN_DIM,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.PILL,
+    borderWidth: 1,
+    borderColor: "rgba(0,255,136,0.2)",
+  },
+  heroBadgeText: {
+    color: COLORS.NEON_GREEN,
     fontWeight: "800",
-    fontSize: 12,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    fontFamily: FONTS.MONO,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: COLORS.TEXT_PRIMARY,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    color: COLORS.TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
+  // Search
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.INPUT_BG,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+    borderRadius: RADIUS.SM,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 13,
+    color: COLORS.TEXT_PRIMARY,
+    fontFamily: FONTS.MONO,
+    letterSpacing: 0.5,
+  },
+
+  resultCount: {
+    color: COLORS.TEXT_MUTED,
+    fontSize: 10,
+    fontWeight: "700",
+    fontFamily: FONTS.MONO,
     letterSpacing: 1,
     marginBottom: 8,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: "#cbd5e1",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  input: {
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    marginBottom: 10,
-  },
-  wikiNoteCard: {
-    backgroundColor: "#e0f2fe",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#bae6fd",
-    padding: 10,
-    marginBottom: 8,
-  },
-  wikiNoteTitle: {
-    color: "#0c4a6e",
-    fontSize: 13,
-    fontWeight: "800",
-    marginBottom: 2,
-  },
-  wikiNoteText: {
-    color: "#0f172a",
-    fontSize: 12,
-    lineHeight: 18,
-  },
+
+  // List
   listContent: {
     paddingBottom: 10,
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: COLORS.SURFACE,
+    borderRadius: RADIUS.MD,
     padding: 14,
-    marginBottom: 9,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#dbeafe",
+    borderColor: COLORS.CARD_BORDER,
   },
   cardTitle: {
-    color: "#0f172a",
-    fontSize: 16,
+    color: COLORS.TEXT_PRIMARY,
+    fontSize: 15,
     fontWeight: "800",
     marginBottom: 4,
   },
   cardDesc: {
-    color: "#334155",
-    lineHeight: 19,
-    fontSize: 13,
+    color: COLORS.TEXT_SECONDARY,
+    lineHeight: 18,
+    fontSize: 12,
+    marginBottom: 6,
   },
+  cardArrow: {
+    color: COLORS.NEON_RED,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+    fontFamily: FONTS.MONO,
+  },
+
+  // Buttons
   backBtnPrimary: {
     marginTop: 8,
-    backgroundColor: "#1d4ed8",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#1e40af",
-    padding: 12,
+    backgroundColor: COLORS.NEON_RED,
+    borderRadius: RADIUS.SM,
+    padding: 14,
     alignItems: "center",
+    shadowColor: COLORS.NEON_RED,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  backBtnSecondary: {
+  backBtn: {
     marginTop: 8,
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: COLORS.SURFACE,
+    borderRadius: RADIUS.SM,
+    borderWidth: 1,
+    borderColor: COLORS.CARD_BORDER,
+    padding: 14,
     alignItems: "center",
   },
   backText: {
-    color: "white",
-    fontWeight: "800",
+    color: "#FFFFFF",
+    fontWeight: "900",
+    fontSize: 13,
+    letterSpacing: 1,
+  },
+
+  // Reader
+  readerHeader: {
+    marginBottom: 10,
   },
   readerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 10,
+    color: COLORS.TEXT_PRIMARY,
+    letterSpacing: 0.5,
   },
   webview: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: RADIUS.MD,
     overflow: "hidden",
-    backgroundColor: "white",
+    backgroundColor: COLORS.DARK_BG,
   },
 });

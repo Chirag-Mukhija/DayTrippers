@@ -378,6 +378,7 @@ def on_send_chat(data):
         "to_user_name": to_u.get("name", "Unknown"),
         "text": text,
         "ts": ts,
+        "is_broadcast": data.get("is_broadcast", False),
     }
 
     emit("chat_message", message, room=from_u["sid"])
@@ -440,6 +441,15 @@ def on_drop_beacon(data):
     }
     beacons[beacon_id] = beacon
     socketio.emit("beacon_dropped", beacon)
+
+
+@socketio.on("remove_beacon")
+def on_remove_beacon(data):
+    beacon_id = data.get("beacon_id")
+    if not beacon_id or beacon_id not in beacons:
+        return
+    del beacons[beacon_id]
+    socketio.emit("beacon_removed", {"beacon_id": beacon_id})
 
 
 @socketio.on("flashlight_ping")

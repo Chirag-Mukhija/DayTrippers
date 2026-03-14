@@ -1,17 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { Camera, CameraView } from "expo-camera";
 import { Audio } from "expo-av";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
+import { isRunningInExpoGo } from "expo";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoginScreen from "./src/screens/LoginScreen";
 import DisasterAlertScreen from "./src/screens/DisasterAlertScreen";
 import SafeZoneScreen from "./src/screens/SafeZoneScreen";
 import MainScreen from "./src/screens/MainScreen";
 import OfflineGuidesScreen from "./src/screens/OfflineGuidesScreen";
+import BroadcastsScreen from "./src/screens/BroadcastsScreen";
 import { connectSocket, disconnectSocket } from "./src/services/socket";
 import { LOCATION_PUSH_INTERVAL_MS, START_COORDS } from "./src/config";
 
@@ -26,14 +28,15 @@ function toNumberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function normalizeUserCoords(user) {
-  if (!user) return user;
+function normalizeUserCoords(u) {
+  if (!u) return u;
   return {
-    ...user,
-    lat: toNumberOrNull(user.lat),
-    lon: toNumberOrNull(user.lon),
-    supplies: Array.isArray(user.supplies)
-      ? user.supplies.filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim())
+    ...u,
+    lat: toNumberOrNull(u.lat),
+    lon: toNumberOrNull(u.lon),
+    last_updated: Date.now(),
+    supplies: Array.isArray(u.supplies)
+      ? u.supplies.filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim())
       : [],
   };
 }
@@ -61,6 +64,9 @@ export default function App() {
   const [isSessionChecked, setIsSessionChecked] = useState(false);
   const [me, setMe] = useState(null);
   const [users, setUsers] = useState([]);
+  const [toastText, setToastText] = useState("");
+  const [broadcastAlert, setBroadcastAlert] = useState(null);
+  const [broadcastHistory, setBroadcastHistory] = useState([]);
   const [chatLinks, setChatLinks] = useState([]);
   const [beacons, setBeacons] = useState([]);
   const [evacuation, setEvacuation] = useState(null);
@@ -73,7 +79,6 @@ export default function App() {
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [cameraPermissionGranted, setCameraPermissionGranted] = useState(false);
   const [isInteractionLocked, setIsInteractionLocked] = useState(false);
-  const [toastText, setToastText] = useState("");
 
   useEffect(() => {
     async function setupNotifications() {
@@ -95,9 +100,11 @@ export default function App() {
 
         // Expo Go no longer supports remote push tokens for Android (SDK 53+).
         // Local notifications still work; remote push requires a development build.
-        const isExpoGo =
-          Constants?.appOwnership === "expo" || Constants?.executionEnvironment === "storeClient";
-        if (isExpoGo) {
+        const isExpoGoRuntime =
+          isRunningInExpoGo ||
+          Constants?.executionEnvironment === "storeClient" ||
+          Constants?.appOwnership === "expo";
+        if (isExpoGoRuntime && Platform.OS === "android") {
           return;
         }
 
@@ -313,6 +320,7 @@ export default function App() {
                 ...u,
                 lat: toNumberOrNull(lat),
                 lon: toNumberOrNull(lon),
+                last_updated: Date.now(),
               }
             : u
         )
@@ -361,9 +369,40 @@ export default function App() {
       setBeacons((current) => [payload, ...current]);
     });
 
+    socket.on("beacon_removed", (payload) => {
+      setBeacons((current) => current.filter((b) => b.beacon_id !== payload.beacon_id));
+    });
+
     socket.on("evacuation_broadcast", (payload) => {
+      if (!payload.lat && !payload.lon) {
+        setEvacuation(null);
+        Alert.alert("EVACUATION CANCELLED", "The previous evacuation order has been lifted.", [{ text: "COPY THAT" }]);
+        return;
+      }
+      
       setEvacuation(payload);
-      Alert.alert("Evacuation Alert", payload.message || "Evacuate now");
+      let alertMessage = payload.message || "Evacuate now";
+
+      const currentMe = meRef.current;
+      if (currentMe && currentMe.lat && currentMe.lon && payload.lat && payload.lon) {
+        const R = 6371000; // Earth's radius in meters
+        const dLat = ((payload.lat - currentMe.lat) * Math.PI) / 180;
+        const dLon = ((payload.lon - currentMe.lon) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((currentMe.lat * Math.PI) / 180) *
+            Math.cos((payload.lat * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = Math.round(R * c);
+
+        const distStr =
+          distance >= 1000 ? `${(distance / 1000).toFixed(1)} km` : `${distance}m`;
+        alertMessage += `\n\nDistance to point: ${distStr} away`;
+      }
+
+      Alert.alert("EVACUATION ALERT", alertMessage, [{ text: "COPY THAT" }]);
     });
 
     socket.on("flashlight_status", (payload) => {
@@ -386,7 +425,12 @@ export default function App() {
       const fromSelf = payload.from_user_id === meRef.current?.user_id;
       if (!fromSelf) {
         const senderName = payload.from_user_name || payload.from_user_id?.slice(0, 6) || "Unknown";
-        Alert.alert("New Message", `${senderName}: ${payload.text}`);
+        if (payload.is_broadcast) {
+          setBroadcastAlert(payload);
+          setBroadcastHistory((prev) => [{ ...payload, timestamp: Date.now() }, ...prev]);
+        } else {
+          Alert.alert("New Message", `${senderName}: ${payload.text}`);
+        }
       }
     });
 
@@ -610,16 +654,21 @@ export default function App() {
     });
   }
 
-  function dropBeacon(point) {
+  function dropBeacon(point, type, quantity, note) {
     if (!meInUsers || !point) return;
     socketRef.current?.emit("drop_beacon", {
       rescuer_id: meInUsers.user_id,
-      lat: point.lat,
-      lon: point.lon,
-      supply_type: point.supplyType || "Mixed Supplies",
-      quantity: point.quantity || "",
-      note: point.note || "Supplies dropped",
+      lat: Number(point.lat.toFixed(6)),
+      lon: Number(point.lon.toFixed(6)),
+      supply_type: type,
+      quantity,
+      note,
     });
+  }
+
+  function removeBeacon(beaconId) {
+    if (!meInUsers) return;
+    socketRef.current?.emit("remove_beacon", { beacon_id: beaconId });
   }
 
   function updateMySupplies(supplies) {
@@ -632,6 +681,10 @@ export default function App() {
 
   function pingFlashlight(targetUserId) {
     if (!me || !targetUserId || targetUserId === me.user_id) return;
+    const targetUser = users.find((u) => u.user_id === targetUserId);
+    if (me.role !== "rescuer" || targetUser?.role !== "survivor") {
+      return;
+    }
     socketRef.current?.emit("flashlight_ping", {
       rescuer_id: me.user_id,
       target_user_id: targetUserId,
@@ -640,6 +693,10 @@ export default function App() {
 
   function stopFlashlight(targetUserId) {
     if (!me || !targetUserId || targetUserId === me.user_id) return;
+    const targetUser = users.find((u) => u.user_id === targetUserId);
+    if (me.role !== "rescuer" || targetUser?.role !== "survivor") {
+      return;
+    }
     socketRef.current?.emit("flashlight_ping_stop", {
       rescuer_id: me.user_id,
       target_user_id: targetUserId,
@@ -647,13 +704,58 @@ export default function App() {
   }
 
   function broadcastEvacuation(point, message) {
-    if (!meInUsers || !point) return;
+    if (!meInUsers) return;
     socketRef.current?.emit("broadcast_evacuation", {
       rescuer_id: meInUsers.user_id,
-      lat: Number(point.lat.toFixed(6)),
-      lon: Number(point.lon.toFixed(6)),
+      lat: point ? Number(point.lat.toFixed(6)) : null,
+      lon: point ? Number(point.lon.toFixed(6)) : null,
       message: message || "Proceed calmly to the marked evacuation point.",
     });
+  }
+
+  function broadcastMessage(text) {
+    if (!me || !text) return;
+    
+    // Add to own history
+    const sentPayload = {
+      from_user_id: me.user_id,
+      from_user_name: me.name,
+      text,
+      is_broadcast: true,
+      timestamp: Date.now(),
+    };
+    setBroadcastHistory((prev) => [sentPayload, ...prev]);
+
+    const otherUsers = users.filter((u) => u.user_id !== me.user_id);
+    otherUsers.forEach((u) => {
+      socketRef.current?.emit("send_chat", {
+        from_user_id: me.user_id,
+        to_user_id: u.user_id,
+        text,
+        is_broadcast: true,
+      });
+    });
+  }
+
+  async function handleLogout() {
+    try {
+      await AsyncStorage.removeItem(USER_SESSION_KEY);
+    } catch {}
+    disconnectSocket();
+    socketRef.current = null;
+    locationSubscriptionRef.current?.remove();
+    locationSubscriptionRef.current = null;
+    stopFlashSignals();
+    setMe(null);
+    meRef.current = null;
+    setUsers([]);
+    setChatLinks([]);
+    setBeacons([]);
+    setEvacuation(null);
+    setActiveFlashTargets([]);
+    setDisasterAlert(null);
+    setSafeZone(null);
+    setScreen("login");
   }
 
   let content = null;
@@ -672,6 +774,13 @@ export default function App() {
     content = <SafeZoneScreen zone={safeZone} currentLocation={meInUsers || me} onArrive={simulateArrival} />;
   } else if (screen === "guides") {
     content = <OfflineGuidesScreen onBack={() => setScreen("main")} />;
+  } else if (screen === "broadcasts") {
+    content = (
+      <BroadcastsScreen
+        broadcasts={broadcastHistory}
+        onBack={() => setScreen("main")}
+      />
+    );
   } else {
     content = (
       <MainScreen
@@ -683,18 +792,22 @@ export default function App() {
         activeFlashTargets={activeFlashTargets}
         onSendChat={sendChat}
         onDropBeacon={dropBeacon}
+        onRemoveBeacon={removeBeacon}
         onUpdateMySupplies={updateMySupplies}
         onFlashlightPing={pingFlashlight}
         onStopFlashlight={stopFlashlight}
         onBroadcastEvacuation={broadcastEvacuation}
+        onBroadcastMessage={broadcastMessage}
+        onLogout={handleLogout}
         onOpenOfflineGuides={() => setScreen("guides")}
+        onOpenBroadcasts={() => setScreen("broadcasts")}
       />
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0A0F" }}>
+      <StatusBar barStyle="light-content" />
       {content}
       {isFlashSignalActive && cameraPermissionGranted ? (
         <CameraView
@@ -715,6 +828,25 @@ export default function App() {
           <Text style={styles.lockText}>Do not use the app. Stay visible for the rescuer.</Text>
         </View>
       ) : null}
+
+      <Modal visible={!!broadcastAlert} transparent animationType="fade">
+        <View style={styles.broadcastOverlay}>
+          <View style={styles.broadcastCard}>
+            <Text style={styles.broadcastTitle}>📢 RESCUER BROADCAST</Text>
+            <Text style={styles.broadcastSender}>
+              FROM: {broadcastAlert?.from_user_name || broadcastAlert?.from_user_id?.slice(0, 6)}
+            </Text>
+            <View style={styles.broadcastDivider} />
+            <Text style={styles.broadcastMessage}>{broadcastAlert?.text}</Text>
+            <Pressable
+              style={styles.broadcastBtn}
+              onPress={() => setBroadcastAlert(null)}
+            >
+              <Text style={styles.broadcastBtnText}>ACKNOWLEDGE</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       {toastText ? (
         <View pointerEvents="none" style={styles.toastWrap}>
           <View style={styles.toastCard}>
@@ -731,19 +863,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0A0A0F",
   },
   bootTitle: {
-    color: "#fff",
-    fontSize: 30,
+    color: "#FF4B4B",
+    fontSize: 32,
     fontWeight: "900",
-    letterSpacing: -0.5,
+    letterSpacing: 3,
   },
   bootSubtitle: {
-    marginTop: 8,
-    color: "#cbd5e1",
-    fontSize: 14,
-    fontWeight: "600",
+    marginTop: 10,
+    color: "#8B8B9E",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 2,
+    fontFamily: "Courier",
   },
   hiddenTorchCamera: {
     position: "absolute",
@@ -755,34 +889,37 @@ const styles = StyleSheet.create({
   },
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255,255,255,0.95)",
+    backgroundColor: "rgba(255, 75, 75, 0.92)",
     alignItems: "center",
     justifyContent: "center",
   },
   flashText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "900",
-    color: "#b91c1c",
+    color: "#FFFFFF",
+    letterSpacing: 1,
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.72)",
+    backgroundColor: "rgba(10, 10, 15, 0.92)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
   },
   lockTitle: {
-    color: "#fff",
-    fontSize: 30,
+    color: "#FF4B4B",
+    fontSize: 28,
     fontWeight: "900",
     marginBottom: 12,
     textAlign: "center",
+    letterSpacing: 1,
   },
   lockText: {
-    color: "#f3f4f6",
-    fontSize: 18,
+    color: "#F0F0F5",
+    fontSize: 16,
     fontWeight: "700",
     textAlign: "center",
+    lineHeight: 24,
   },
   toastWrap: {
     position: "absolute",
@@ -792,18 +929,80 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 9999,
   },
+  broadcastOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10,10,15,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  broadcastCard: {
+    backgroundColor: "#1A1A24",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#FFB020",
+    padding: 24,
+    width: "100%",
+    shadowColor: "#FFB020",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  broadcastTitle: {
+    color: "#FFB020",
+    fontSize: 20,
+    fontWeight: "900",
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  broadcastSender: {
+    color: "#8B8B9E",
+    fontSize: 12,
+    fontFamily: "Courier",
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: 16,
+  },
+  broadcastDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,176,32,0.2)",
+    marginBottom: 16,
+  },
+  broadcastMessage: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "700",
+    marginBottom: 24,
+  },
+  broadcastBtn: {
+    backgroundColor: "rgba(255,176,32,0.15)",
+    borderWidth: 1,
+    borderColor: "#FFB020",
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  broadcastBtnText: {
+    color: "#FFB020",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
   toastCard: {
     maxWidth: "92%",
-    backgroundColor: "rgba(15, 23, 42, 0.94)",
-    borderRadius: 12,
+    backgroundColor: "rgba(18, 18, 26, 0.96)",
+    borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#334155",
+    borderColor: "#2A2A3A",
   },
   toastText: {
-    color: "#fff",
+    color: "#F0F0F5",
     fontWeight: "700",
     fontSize: 13,
+    fontFamily: "Courier",
   },
 });
