@@ -40,7 +40,6 @@ const GUIDES = [
 export default function OfflineGuidesScreen({ onBack }) {
   const [query, setQuery] = useState("");
   const [selectedGuide, setSelectedGuide] = useState(null);
-  const [guideHtml, setGuideHtml] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -48,50 +47,18 @@ export default function OfflineGuidesScreen({ onBack }) {
     return GUIDES.filter((g) => (`${g.title} ${g.keywords}`).toLowerCase().includes(q));
   }, [query]);
 
-  useEffect(() => {
-    let active = true;
-    if (!selectedGuide) {
-      setGuideHtml("");
-      return () => {
-        active = false;
-      };
-    }
-
-    const asset = Asset.fromModule(selectedGuide.file);
-    asset
-      .downloadAsync()
-      .then(async () => {
-        if (!active) return;
-        const localUri = asset.localUri || asset.uri;
-        if (!localUri) {
-          setGuideHtml("");
-          return;
-        }
-        const html = await FileSystem.readAsStringAsync(localUri, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        if (!active) return;
-        setGuideHtml(html);
-      })
-      .catch(() => {
-        if (!active) return;
-        setGuideHtml("");
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [selectedGuide]);
-
   if (selectedGuide) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>{selectedGuide.title}</Text>
-        {guideHtml ? (
-          <WebView source={{ html: guideHtml }} style={styles.webview} originWhitelist={["*"]} />
-        ) : (
-          <Text>Loading guide...</Text>
-        )}
+        <WebView 
+          source={selectedGuide.file} 
+          style={styles.webview} 
+          originWhitelist={["*"]} 
+          allowFileAccess={true}
+          allowFileAccessFromFileURLs={true}
+          allowUniversalAccessFromFileURLs={true}
+        />
         <Pressable style={styles.backBtn} onPress={() => setSelectedGuide(null)}>
           <Text style={styles.backText}>Back To Library</Text>
         </Pressable>

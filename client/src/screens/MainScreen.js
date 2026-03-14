@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -16,12 +17,15 @@ export default function MainScreen({
   chatLinks,
   beacons,
   evacuation,
+  activeFlashTargets,
   onSendChat,
   onDropBeacon,
   onFlashlightPing,
+  onStopFlashlight,
   onBroadcastEvacuation,
   onOpenOfflineGuides,
 }) {
+  const mapRef = React.useRef(null);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [chatText, setChatText] = useState("");
   const [isPickEvacMode, setIsPickEvacMode] = useState(false);
@@ -42,6 +46,10 @@ export default function MainScreen({
   }
 
   const selectedUserObj = useMemo(() => users.find((u) => u.user_id === selectedUserId), [users, selectedUserId]);
+  const selectedUserIsActivelyPinged = useMemo(
+    () => !!selectedUserId && (activeFlashTargets || []).includes(selectedUserId),
+    [activeFlashTargets, selectedUserId]
+  );
 
   const others = useMemo(() => users.filter((u) => u.user_id !== me.user_id), [users, me.user_id]);
   const usersById = useMemo(() => {
@@ -96,9 +104,20 @@ export default function MainScreen({
     [me.lat, me.lon]
   );
 
+  const centerOnMe = () => {
+    if (!mapRef.current || !me || !isValidCoord(me.lat, me.lon)) return;
+    mapRef.current.animateToRegion({
+      latitude: me.lat,
+      longitude: me.lon,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
+    }, 1000);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <MapView
+      <MapView onPress={() => setSelectedUserId("")}
+        ref={mapRef}
         style={styles.map}
         initialRegion={mapRegion}
         onLongPress={({ nativeEvent }) => {
@@ -133,9 +152,9 @@ export default function MainScreen({
                 coordinate={{ latitude: displayUser.lat, longitude: displayUser.lon }}
                 title={isMe ? `${u.name} (You)` : u.name}
                 description={`${u.role}${u.arrived ? " • safe" : ""}`}
-                onPress={() => setSelectedUserId(u.user_id)}
+                onPress={(e) => { e.stopPropagation(); setSelectedUserId(u.user_id); }}
                 zIndex={isMe ? 999 : 1}
-                tracksViewChanges={false}
+                tracksViewChanges={Platform.OS === "ios" ? false : true}
               >
                 <View
                   style={{
@@ -209,10 +228,21 @@ export default function MainScreen({
         <Text style={styles.meta}>Users: {users.length} ({users.filter(u => isValidCoord(u.lat, u.lon)).length} on map) • Links: {chatLinks.length} • Beacons: {beacons.length}</Text>
       </View>
 
+      <Pressable style={styles.btnLocate} onPress={centerOnMe}>
+        <Text style={{ fontSize: 24 }}>📍</Text>
+      </Pressable>
+
       <View style={styles.bottomPanel}>
-        <Text style={styles.panelTitle}>
-          Selected: {selectedUserObj ? selectedUserObj.name : "none"}
-        </Text>
+        {selectedUserId ? (
+          <View style={styles.panelHeader}>
+            <Text style={styles.panelTitle}>
+              Selected: {selectedUserObj ? selectedUserObj.name : "none"}
+            </Text>
+            <Pressable onPress={() => setSelectedUserId("")} style={styles.btnDeselect}>
+              <Text style={styles.btnDeselectText}>Close</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {selectedUserId ? (
           <>
@@ -246,15 +276,29 @@ export default function MainScreen({
                 {isPickEvacMode ? "Cancel Evac Point Picking" : "Pick Evac Point On Map"}
               </Text>
             </Pressable>
-            <Pressable
-              style={styles.btnPrimary}
-              onPress={() => {
-                if (!selectedUserId) return;
-                onFlashlightPing(selectedUserId);
-              }}
-            >
-              <Text style={styles.btnText}>Flashlight Ping Selected User</Text>
-            </Pressable>
+{selectedUserId && selectedUserId !== me?.user_id ? (
+                <Pressable
+                  style={styles.btnPrimary}
+                  onPress={() => {
+                    if (!selectedUserId) return;
+                    onFlashlightPing(selectedUserId);
+                  }}
+                >
+                  <Text style={styles.btnText}>Start Flash + Beep Alert</Text>
+                </Pressable>
+              ) : null}
+            {selectedUserId && selectedUserId !== me?.user_id ? (
+              <Pressable
+                style={[styles.btnStopFlash, !selectedUserIsActivelyPinged && styles.btnDisabled]}
+                disabled={!selectedUserIsActivelyPinged}
+                onPress={() => {
+                  if (!selectedUserId) return;
+                  onStopFlashlight(selectedUserId);
+                }}
+              >
+                <Text style={styles.btnText}>Stop Flash Alert</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : null}
 
@@ -301,139 +345,195 @@ export default function MainScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fffaf0",
+    backgroundColor: "#F3F4F6",
   },
   map: {
     flex: 1,
   },
   topStrip: {
     position: "absolute",
-    top: 12,
-    left: 12,
-    right: 12,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.94)",
-    borderWidth: 1,
-    borderColor: "#fdba74",
+    top: 24,
+    left: 16,
+    right: 16,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#9a3412",
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111827",
+    letterSpacing: -0.5,
   },
   meta: {
-    marginTop: 2,
-    color: "#7c2d12",
-    fontSize: 12,
+    marginTop: 4,
+    color: "#6B7280",
+    fontSize: 13,
+    fontWeight: "500",
   },
   bottomPanel: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 12,
-    backgroundColor: "rgba(255,255,255,0.95)",
-    borderWidth: 1,
-    borderColor: "#fed7aa",
-    borderRadius: 12,
-    padding: 10,
-    gap: 8,
+    left: 16,
+    right: 16,
+    bottom: 32,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: 24,
+    padding: 20,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  panelHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  btnDeselect: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#f1f5f9",
+    borderRadius: 8,
+  },
+  btnDeselectText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#475569",
   },
   panelTitle: {
-    color: "#7c2d12",
-    fontWeight: "700",
+    color: "#374151",
+    fontWeight: "800",
+    fontSize: 15,
   },
   smallInfo: {
-    color: "#92400e",
-    fontSize: 12,
+    color: "#9CA3AF",
+    fontSize: 13,
+    fontWeight: "500",
   },
   input: {
     borderWidth: 1,
-    borderColor: "#fdba74",
-    borderRadius: 10,
-    padding: 10,
-    backgroundColor: "white",
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: "#F9FAFB",
+    fontSize: 15,
   },
   btnPrimary: {
-    backgroundColor: "#dc2626",
-    borderRadius: 10,
-    padding: 11,
+    backgroundColor: "#111827",
+    borderRadius: 14,
+    padding: 14,
     alignItems: "center",
   },
   btnWarn: {
+    backgroundColor: "#DC2626",
+  },
+  btnStopFlash: {
     backgroundColor: "#b91c1c",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+  },
+  btnDisabled: {
+    backgroundColor: "#9ca3af",
   },
   btnSecondary: {
-    backgroundColor: "#ea580c",
-    borderRadius: 10,
-    padding: 11,
+    backgroundColor: "#3B82F6",
+    borderRadius: 14,
+    padding: 14,
     alignItems: "center",
   },
   btnText: {
     color: "white",
     fontWeight: "800",
+    fontSize: 15,
   },
   btnGuides: {
-    borderRadius: 10,
-    padding: 11,
+    borderRadius: 14,
+    padding: 14,
     alignItems: "center",
-    backgroundColor: "#1d4ed8",
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   btnGuidesText: {
-    color: "white",
-    fontWeight: "800",
+    color: "#111827",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  btnLocate: {
+    position: "absolute",
+    right: 16,
+    bottom: 240, 
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
   },
   modalRoot: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   modalCard: {
-    backgroundColor: "#fff7ed",
-    padding: 14,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    borderWidth: 1,
-    borderColor: "#fed7aa",
+    backgroundColor: "white",
+    padding: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   modalTitle: {
-    fontSize: 18,
-    color: "#9a3412",
-    fontWeight: "800",
+    fontSize: 20,
+    color: "#111827",
+    fontWeight: "900",
+    letterSpacing: -0.5,
   },
   modalMeta: {
-    marginTop: 4,
-    marginBottom: 8,
-    color: "#7c2d12",
+    marginTop: 6,
+    marginBottom: 16,
+    color: "#6B7280",
+    fontSize: 14,
   },
   modalInput: {
-    minHeight: 68,
-    backgroundColor: "white",
+    minHeight: 100,
+    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: "#fdba74",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
+    borderColor: "#E5E7EB",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    fontSize: 16,
   },
   btnMuted: {
-    marginTop: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#fdba74",
-    padding: 11,
+    marginTop: 8,
+    borderRadius: 14,
+    padding: 14,
     alignItems: "center",
-    backgroundColor: "#ffedd5",
+    backgroundColor: "transparent",
   },
   btnMutedText: {
-    color: "#9a3412",
+    color: "#6B7280",
     fontWeight: "700",
+    fontSize: 15,
   },
   myLocationDotOuter: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(37, 99, 235, 0.3)",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(59, 130, 246, 0.2)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -441,8 +541,12 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: "#2563eb",
+    backgroundColor: "#3B82F6",
     borderWidth: 2,
     borderColor: "white",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
   },
 });

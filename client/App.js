@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
 import * as Location from "expo-location";
+import { Camera, CameraView } from "expo-camera";
+import { Audio } from "expo-av";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoginScreen from "./src/screens/LoginScreen";
 import DisasterAlertScreen from "./src/screens/DisasterAlertScreen";
@@ -32,6 +34,9 @@ export default function App() {
   const socketRef = useRef(null);
   const locationSubscriptionRef = useRef(null);
   const flashTimeoutRef = useRef(null);
+  const flashStrobeIntervalRef = useRef(null);
+  const beepIntervalRef = useRef(null);
+  const sirenSoundRef = useRef(null);
   const meRef = useRef(null);
   const [screen, setScreen] = useState("login");
   const [me, setMe] = useState(null);
@@ -39,9 +44,123 @@ export default function App() {
   const [chatLinks, setChatLinks] = useState([]);
   const [beacons, setBeacons] = useState([]);
   const [evacuation, setEvacuation] = useState(null);
+  const [activeFlashTargets, setActiveFlashTargets] = useState([]);
   const [disasterAlert, setDisasterAlert] = useState(null);
   const [safeZone, setSafeZone] = useState(null);
-  const [flashUntilTs, setFlashUntilTs] = useState(0);
+  const [isFlashSignalActive, setIsFlashSignalActive] = useState(false);
+  const [isFlashStrobeOn, setIsFlashStrobeOn] = useState(false);
+  const [useScreenFlashFallback, setUseScreenFlashFallback] = useState(false);
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [cameraPermissionGranted, setCameraPermissionGranted] = useState(false);
+  const [isInteractionLocked, setIsInteractionLocked] = useState(false);
+
+  useEffect(() => {
+    let id;
+    if (useScreenFlashFallback && isFlashSignalActive) {
+      id = setInterval(() => setIsFlashStrobeOn((prev) => !prev), 120);
+    } else {
+      setIsFlashStrobeOn(false);
+    }
+    return () => clearInterval(id);
+  }, [isFlashSignalActive, useScreenFlashFallback]);
+
+  async function ensureCameraPermission() {
+    try {
+      const permission = await Camera.requestCameraPermissionsAsync();
+      const granted = permission?.status === "granted";
+      setCameraPermissionGranted(granted);
+      return granted;
+    } catch {
+      setCameraPermissionGranted(false);
+      return false;
+    }
+  }
+
+  async function startSirenTone() {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      });
+
+      if (!sirenSoundRef.current) {
+        const { sound } = await Audio.Sound.createAsync(
+          require("./assets/audio/siren.wav"),
+          {
+            shouldPlay: true,
+            isLooping: true,
+            volume: 1.0,
+          }
+        );
+        sirenSoundRef.current = sound;
+      } else {
+        await sirenSoundRef.current.setIsLoopingAsync(true);
+        await sirenSoundRef.current.setVolumeAsync(1.0);
+        await sirenSoundRef.current.playAsync();
+      }
+    } catch {
+      // Keep flash mode active even if siren playback fails.
+    }
+  }
+
+  async function stopSirenTone() {
+    if (!sirenSoundRef.current) return;
+    try {
+      await sirenSoundRef.current.stopAsync();
+    } catch {
+      // ignore
+    }
+  }
+
+  function stopFlashSignals() {
+    if (flashTimeoutRef.current) {
+      clearTimeout(flashTimeoutRef.current);
+      flashTimeoutRef.current = null;
+    }
+    if (flashStrobeIntervalRef.current) {
+      clearInterval(flashStrobeIntervalRef.current);
+      flashStrobeIntervalRef.current = null;
+    }
+    if (beepIntervalRef.current) {
+      clearInterval(beepIntervalRef.current);
+      beepIntervalRef.current = null;
+    }
+    stopSirenTone();
+    setIsFlashSignalActive(false);
+    setIsInteractionLocked(false);
+    setIsTorchOn(false);
+    setIsFlashStrobeOn(false);
+  }
+
+  async function startFlashSignal() {
+    stopFlashSignals();
+    const canUseTorch = await ensureCameraPermission();
+    setIsFlashSignalActive(true);
+    setIsInteractionLocked(true);
+
+    if (canUseTorch) {
+      setUseScreenFlashFallback(false);
+      let torchOn = true;
+      setIsTorchOn(true);
+      flashStrobeIntervalRef.current = setInterval(() => {
+        torchOn = !torchOn;
+        setIsTorchOn(torchOn);
+      }, 140);
+    } else {
+      setUseScreenFlashFallback(true);
+    }
+
+    startSirenTone();
+
+    beepIntervalRef.current = setInterval(() => {
+      Vibration.vibrate(250);
+    }, 750);
+  }
 
   const meInUsers = useMemo(() => {
     if (!me) return null;
@@ -56,8 +175,10 @@ export default function App() {
     return () => {
       disconnectSocket();
       locationSubscriptionRef.current?.remove();
-      if (flashTimeoutRef.current) {
-        clearTimeout(flashTimeoutRef.current);
+      stopFlashSignals();
+      if (sirenSoundRef.current) {
+        sirenSoundRef.current.unloadAsync();
+        sirenSoundRef.current = null;
       }
     };
   }, []);
@@ -86,6 +207,7 @@ export default function App() {
       setChatLinks(payload.chat_links || []);
       setBeacons(payload.beacons || []);
       setEvacuation(payload.evacuation || null);
+      setActiveFlashTargets(payload.active_flash_targets || []);
     });
 
     socket.on("presence_update", (payload) => {
@@ -107,6 +229,9 @@ export default function App() {
     });
 
     socket.on("disaster_alert", (payload) => {
+      if (meRef.current?.role === "rescuer") {
+        return;
+      }
       setDisasterAlert(payload);
       setScreen("alert");
     });
@@ -136,21 +261,27 @@ export default function App() {
       Alert.alert("Evacuation Alert", payload.message || "Evacuate now");
     });
 
-    socket.on("flashlight_command", (payload) => {
-      const durationMs = Math.max(1000, (payload.duration_s || 3) * 1000);
-      setFlashUntilTs(Date.now() + durationMs);
-      if (flashTimeoutRef.current) {
-        clearTimeout(flashTimeoutRef.current);
+    socket.on("flashlight_status", (payload) => {
+      setActiveFlashTargets(payload.active_target_user_ids || []);
+    });
+
+    socket.on("flashlight_command", async (payload) => {
+      const command = payload?.command || "start";
+      if (command === "stop") {
+        stopFlashSignals();
+        Alert.alert("Flashlight Ping", "Rescuer has stopped the alert.");
+        return;
       }
-      flashTimeoutRef.current = setTimeout(() => setFlashUntilTs(0), durationMs + 100);
-      Vibration.vibrate(durationMs);
-      Alert.alert("Flashlight Ping", `Identify this phone now (${payload.duration_s || 3}s).`);
+
+      await startFlashSignal();
+      Alert.alert("Flashlight Ping", "Emergency alert active. Stay visible until rescuer stops it.");
     });
 
     socket.on("chat_message", (payload) => {
       const fromSelf = payload.from_user_id === meRef.current?.user_id;
       if (!fromSelf) {
-        Alert.alert("New Message", `${payload.from_user_id.slice(0, 6)}: ${payload.text}`);
+        const senderName = payload.from_user_name || payload.from_user_id?.slice(0, 6) || "Unknown";
+        Alert.alert("New Message", `${senderName}: ${payload.text}`);
       }
     });
   }
@@ -234,6 +365,10 @@ export default function App() {
       arrived: false,
     };
 
+    // Set user refs early to avoid role-based event races right after socket connection.
+    meRef.current = user;
+    setMe(user);
+
     try {
       const socket = connectSocket();
       socketRef.current = socket;
@@ -244,8 +379,6 @@ export default function App() {
     } catch {
       Alert.alert("Offline mode", "Could not reach server. Joined local session mode.");
     }
-
-    setMe(user);
     setScreen("main");
   }
 
@@ -284,11 +417,18 @@ export default function App() {
   }
 
   function pingFlashlight(targetUserId) {
-    if (!me) return;
+    if (!me || !targetUserId || targetUserId === me.user_id) return;
     socketRef.current?.emit("flashlight_ping", {
       rescuer_id: me.user_id,
       target_user_id: targetUserId,
-      duration_s: 3,
+    });
+  }
+
+  function stopFlashlight(targetUserId) {
+    if (!me || !targetUserId || targetUserId === me.user_id) return;
+    socketRef.current?.emit("flashlight_ping_stop", {
+      rescuer_id: me.user_id,
+      target_user_id: targetUserId,
     });
   }
 
@@ -319,9 +459,11 @@ export default function App() {
         chatLinks={chatLinks}
         beacons={beacons}
         evacuation={evacuation}
+        activeFlashTargets={activeFlashTargets}
         onSendChat={sendChat}
         onDropBeacon={dropBeacon}
         onFlashlightPing={pingFlashlight}
+        onStopFlashlight={stopFlashlight}
         onBroadcastEvacuation={broadcastEvacuation}
         onOpenOfflineGuides={() => setScreen("guides")}
       />
@@ -332,9 +474,23 @@ export default function App() {
     <SafeAreaView style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" />
       {content}
-      {Date.now() < flashUntilTs ? (
+      {isFlashSignalActive && cameraPermissionGranted ? (
+        <CameraView
+          style={styles.hiddenTorchCamera}
+          facing="back"
+          active
+          enableTorch={isTorchOn}
+        />
+      ) : null}
+      {isFlashStrobeOn && (
         <View pointerEvents="none" style={styles.flashOverlay}>
-          <Text style={styles.flashText}>FLASHLIGHT PING ACTIVE</Text>
+          <Text style={styles.flashText}>TORCH UNAVAILABLE - SCREEN FLASH MODE</Text>
+        </View>
+      )}
+      {isInteractionLocked ? (
+        <View style={styles.lockOverlay}>
+          <Text style={styles.lockTitle}>Emergency Flash Alert</Text>
+          <Text style={styles.lockText}>Do not use the app. Stay visible for the rescuer.</Text>
         </View>
       ) : null}
     </SafeAreaView>
@@ -342,6 +498,14 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  hiddenTorchCamera: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    top: -100,
+    left: -100,
+    opacity: 0,
+  },
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(255,255,255,0.95)",
@@ -352,5 +516,25 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "900",
     color: "#b91c1c",
+  },
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  lockTitle: {
+    color: "#fff",
+    fontSize: 30,
+    fontWeight: "900",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  lockText: {
+    color: "#f3f4f6",
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
   },
 });

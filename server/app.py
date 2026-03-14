@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+# Gevent monkey patching must happen before any other imports
+import gevent.monkey
+gevent.monkey.patch_all()
+
 import math
+import random
 import time
 import uuid
 from dataclasses import dataclass, asdict
@@ -34,6 +39,7 @@ users_by_sid: Dict[str, str] = {}
 chat_links: Set[Tuple[str, str]] = set()
 beacons: Dict[str, dict] = {}
 evacuation_message: Optional[dict] = None
+active_flash_targets: Set[str] = set()
 
 
 def as_float_or_none(value):
@@ -56,15 +62,33 @@ def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> floa
 
 
 def nearest_safe_zone(lat: float, lon: float) -> dict:
-    best = None
-    for zone in SAFE_ZONES:
-        dist = haversine_meters(lat, lon, zone.lat, zone.lon)
-        if best is None or dist < best["distance_m"]:
-            best = {
-                **asdict(zone),
-                "distance_m": round(dist, 1),
-            }
-    return best or {}
+    # Generate a random safe point within 4km of the user.
+    earth_radius_m = 6_371_000
+    distance_m = random.uniform(250, 3_950)
+    bearing_rad = random.uniform(0, 2 * math.pi)
+
+    lat1 = math.radians(lat)
+    lon1 = math.radians(lon)
+    angular_distance = distance_m / earth_radius_m
+
+    lat2 = math.asin(
+        math.sin(lat1) * math.cos(angular_distance)
+        + math.cos(lat1) * math.sin(angular_distance) * math.cos(bearing_rad)
+    )
+    lon2 = lon1 + math.atan2(
+        math.sin(bearing_rad) * math.sin(angular_distance) * math.cos(lat1),
+        math.cos(angular_distance) - math.sin(lat1) * math.sin(lat2),
+    )
+
+    lon2 = (lon2 + 3 * math.pi) % (2 * math.pi) - math.pi
+
+    return {
+        "id": f"rand-sz-{uuid.uuid4().hex[:8]}",
+        "name": "Dynamic Safe Zone",
+        "lat": round(math.degrees(lat2), 6),
+        "lon": round(math.degrees(lon2), 6),
+        "distance_m": round(distance_m, 1),
+    }
 
 
 def serialize_chat_links() -> List[dict]:
@@ -87,6 +111,10 @@ def public_user_view(user: dict) -> dict:
 def broadcast_presence() -> None:
     users = [public_user_view(u) for u in users_by_id.values()]
     socketio.emit("presence_update", {"users": users})
+
+
+def broadcast_flashlight_status() -> None:
+    socketio.emit("flashlight_status", {"active_target_user_ids": sorted(active_flash_targets)})
 
 
 @app.get("/")
@@ -140,6 +168,10 @@ def on_disconnect():
         users_by_id[uid]["last_seen"] = int(time.time())
         del users_by_id[uid]
 
+    if uid in active_flash_targets:
+        active_flash_targets.discard(uid)
+        broadcast_flashlight_status()
+
     broadcast_presence()
 
 
@@ -169,6 +201,7 @@ def on_register_user(data):
             "chat_links": serialize_chat_links(),
             "beacons": list(beacons.values()),
             "evacuation": evacuation_message,
+            "active_flash_targets": sorted(active_flash_targets),
             "safe_zones": [asdict(z) for z in SAFE_ZONES],
         },
     )
@@ -234,17 +267,19 @@ def on_send_chat(data):
     if not from_user or not to_user or not text:
         return
 
-    message = {
-        "from_user_id": from_user,
-        "to_user_id": to_user,
-        "text": text,
-        "ts": ts,
-    }
-
     from_u = users_by_id.get(from_user)
     to_u = users_by_id.get(to_user)
     if not from_u or not to_u:
         return
+
+    message = {
+        "from_user_id": from_user,
+        "from_user_name": from_u.get("name", "Unknown"),
+        "to_user_id": to_user,
+        "to_user_name": to_u.get("name", "Unknown"),
+        "text": text,
+        "ts": ts,
+    }
 
     emit("chat_message", message, room=from_u["sid"])
     emit("chat_message", message, room=to_u["sid"])
@@ -272,8 +307,15 @@ def on_drop_beacon(data):
 
 @socketio.on("flashlight_ping")
 def on_flashlight_ping(data):
+    rescuer_id = data.get("rescuer_id")
     target_user_id = data.get("target_user_id")
-    duration_s = int(data.get("duration_s", 3))
+    if not target_user_id or not rescuer_id or target_user_id == rescuer_id:
+        return
+
+    rescuer = users_by_id.get(rescuer_id)
+    if not rescuer or rescuer.get("role") != "rescuer":
+        return
+
     target = users_by_id.get(target_user_id)
     if not target:
         return
@@ -281,12 +323,42 @@ def on_flashlight_ping(data):
     emit(
         "flashlight_command",
         {
-            "duration_s": duration_s,
-            "from_rescuer_id": data.get("rescuer_id"),
+            "command": "start",
+            "from_rescuer_id": rescuer_id,
             "target_user_id": target_user_id,
         },
         room=target["sid"],
     )
+    active_flash_targets.add(target_user_id)
+    broadcast_flashlight_status()
+
+
+@socketio.on("flashlight_ping_stop")
+def on_flashlight_ping_stop(data):
+    rescuer_id = data.get("rescuer_id")
+    target_user_id = data.get("target_user_id")
+    if not target_user_id or not rescuer_id or target_user_id == rescuer_id:
+        return
+
+    rescuer = users_by_id.get(rescuer_id)
+    if not rescuer or rescuer.get("role") != "rescuer":
+        return
+
+    target = users_by_id.get(target_user_id)
+    if not target:
+        return
+
+    emit(
+        "flashlight_command",
+        {
+            "command": "stop",
+            "from_rescuer_id": rescuer_id,
+            "target_user_id": target_user_id,
+        },
+        room=target["sid"],
+    )
+    active_flash_targets.discard(target_user_id)
+    broadcast_flashlight_status()
 
 
 @socketio.on("broadcast_evacuation")

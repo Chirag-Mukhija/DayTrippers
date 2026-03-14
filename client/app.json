@@ -12,7 +12,13 @@
       "package": "com.hackathonoffline.rescuemesh"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow RescueMesh to use camera hardware for emergency flashlight ping."
+        }
+      ]
     ]
   }
 }
