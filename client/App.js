@@ -14,6 +14,20 @@ function randomId() {
   return `${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
 }
 
+function toNumberOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeUserCoords(user) {
+  if (!user) return user;
+  return {
+    ...user,
+    lat: toNumberOrNull(user.lat),
+    lon: toNumberOrNull(user.lon),
+  };
+}
+
 export default function App() {
   const socketRef = useRef(null);
   const locationSubscriptionRef = useRef(null);
@@ -68,19 +82,27 @@ export default function App() {
 
   function attachSocketHandlers(socket) {
     socket.on("bootstrap_state", (payload) => {
-      setUsers(payload.users || []);
+      setUsers((payload.users || []).map(normalizeUserCoords));
       setChatLinks(payload.chat_links || []);
       setBeacons(payload.beacons || []);
       setEvacuation(payload.evacuation || null);
     });
 
     socket.on("presence_update", (payload) => {
-      setUsers(payload.users || []);
+      setUsers((payload.users || []).map(normalizeUserCoords));
     });
 
     socket.on("user_moved", ({ user_id, lat, lon }) => {
       setUsers((current) =>
-        current.map((u) => (u.user_id === user_id ? { ...u, lat, lon } : u))
+        current.map((u) =>
+          u.user_id === user_id
+            ? {
+                ...u,
+                lat: toNumberOrNull(lat),
+                lon: toNumberOrNull(lon),
+              }
+            : u
+        )
       );
     });
 
@@ -207,8 +229,8 @@ export default function App() {
       user_id: randomId(),
       name,
       role,
-      lat: initialLocation.lat,
-      lon: initialLocation.lon,
+      lat: toNumberOrNull(initialLocation.lat),
+      lon: toNumberOrNull(initialLocation.lon),
       arrived: false,
     };
 

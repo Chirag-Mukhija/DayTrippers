@@ -36,6 +36,13 @@ beacons: Dict[str, dict] = {}
 evacuation_message: Optional[dict] = None
 
 
+def as_float_or_none(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     radius = 6_371_000
     phi1 = math.radians(lat1)
@@ -143,8 +150,8 @@ def on_register_user(data):
         "user_id": user_id,
         "name": data.get("name", f"User-{user_id[:5]}"),
         "role": data.get("role", "survivor"),
-        "lat": data.get("lat"),
-        "lon": data.get("lon"),
+        "lat": as_float_or_none(data.get("lat")),
+        "lon": as_float_or_none(data.get("lon")),
         "arrived": data.get("arrived", False),
         "connected": True,
         "sid": request.sid,
@@ -175,8 +182,8 @@ def on_location_update(data):
     if not user:
         return
 
-    user["lat"] = data.get("lat")
-    user["lon"] = data.get("lon")
+    user["lat"] = as_float_or_none(data.get("lat"))
+    user["lon"] = as_float_or_none(data.get("lon"))
     user["last_seen"] = int(time.time())
 
     socketio.emit(

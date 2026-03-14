@@ -28,12 +28,47 @@ export default function MainScreen({
   const [evacPointDraft, setEvacPointDraft] = useState(null);
   const [evacMessageDraft, setEvacMessageDraft] = useState("Proceed calmly to the marked evacuation point.");
 
+  function isValidCoord(lat, lon) {
+    return typeof lat === "number" && typeof lon === "number";
+  }
+
   const others = useMemo(() => users.filter((u) => u.user_id !== me.user_id), [users, me.user_id]);
   const usersById = useMemo(() => {
     const map = {};
     for (const u of users) {
       map[u.user_id] = u;
     }
+    return map;
+  }, [users]);
+
+  const displayUsersById = useMemo(() => {
+    const validUsers = users.filter((u) => isValidCoord(u.lat, u.lon));
+    const groupedByCoord = validUsers.reduce((acc, user) => {
+      const key = `${user.lat.toFixed(6)},${user.lon.toFixed(6)}`;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(user);
+      return acc;
+    }, {});
+
+    const map = {};
+    Object.values(groupedByCoord).forEach((group) => {
+      if (group.length === 1) {
+        const only = group[0];
+        map[only.user_id] = only;
+        return;
+      }
+
+      const radius = 0.00012;
+      group.forEach((user, index) => {
+        const angle = (2 * Math.PI * index) / group.length;
+        map[user.user_id] = {
+          ...user,
+          lat: user.lat + radius * Math.cos(angle),
+          lon: user.lon + radius * Math.sin(angle),
+        };
+      });
+    });
+
     return map;
   }, [users]);
 
@@ -46,8 +81,6 @@ export default function MainScreen({
     }),
     [me.lat, me.lon]
   );
-
-  const isValidCoord = (lat, lon) => typeof lat === "number" && typeof lon === "number";
 
   return (
     <SafeAreaView style={styles.container}>
@@ -72,20 +105,25 @@ export default function MainScreen({
         {users
           .filter((u) => isValidCoord(u.lat, u.lon))
           .map((u) => (
+            (() => {
+              const displayUser = displayUsersById[u.user_id] || u;
+              return (
             <Marker
               key={u.user_id}
-              coordinate={{ latitude: u.lat, longitude: u.lon }}
+              coordinate={{ latitude: displayUser.lat, longitude: displayUser.lon }}
               title={u.name}
               description={`${u.role}${u.arrived ? " • safe" : ""}`}
               pinColor={u.role === "rescuer" ? "#b45309" : "#dc2626"}
               onPress={() => setSelectedUserId(u.user_id)}
             />
+              );
+            })()
           ))}
 
         {chatLinks
           .map((link) => {
-            const a = usersById[link.a];
-            const b = usersById[link.b];
+            const a = displayUsersById[link.a] || usersById[link.a];
+            const b = displayUsersById[link.b] || usersById[link.b];
             if (!a || !b || !isValidCoord(a.lat, a.lon) || !isValidCoord(b.lat, b.lon)) {
               return null;
             }
