@@ -134,7 +134,16 @@ export default function App() {
   }
 
   async function initLiveLocation() {
-    const permission = await Location.requestForegroundPermissionsAsync();
+    let permission;
+    try {
+      permission = await Location.requestForegroundPermissionsAsync();
+    } catch {
+      return {
+        lat: START_COORDS.lat,
+        lon: START_COORDS.lon,
+      };
+    }
+
     if (permission.status !== "granted") {
       return {
         lat: START_COORDS.lat,
@@ -142,27 +151,40 @@ export default function App() {
       };
     }
 
-    const current = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-    locationSubscriptionRef.current?.remove();
-    locationSubscriptionRef.current = await Location.watchPositionAsync(
-      {
+    let current;
+    try {
+      current = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
-        timeInterval: LOCATION_PUSH_INTERVAL_MS,
-        distanceInterval: 2,
-      },
-      (position) => {
-        setMe((state) => {
-          if (!state) return state;
-          return {
-            ...state,
-            lat: Number(position.coords.latitude.toFixed(6)),
-            lon: Number(position.coords.longitude.toFixed(6)),
-          };
-        });
-      }
-    );
+      });
+    } catch {
+      return {
+        lat: START_COORDS.lat,
+        lon: START_COORDS.lon,
+      };
+    }
+
+    try {
+      locationSubscriptionRef.current?.remove();
+      locationSubscriptionRef.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: LOCATION_PUSH_INTERVAL_MS,
+          distanceInterval: 2,
+        },
+        (position) => {
+          setMe((state) => {
+            if (!state) return state;
+            return {
+              ...state,
+              lat: Number(position.coords.latitude.toFixed(6)),
+              lon: Number(position.coords.longitude.toFixed(6)),
+            };
+          });
+        }
+      );
+    } catch {
+      // Continue without live tracking if watch setup fails.
+    }
 
     return {
       lat: Number(current.coords.latitude.toFixed(6)),
@@ -171,10 +193,15 @@ export default function App() {
   }
 
   async function handleJoin({ name, role }) {
-    const socket = connectSocket();
-    socketRef.current = socket;
-
-    const initialLocation = await initLiveLocation();
+    let initialLocation = {
+      lat: START_COORDS.lat,
+      lon: START_COORDS.lon,
+    };
+    try {
+      initialLocation = await initLiveLocation();
+    } catch {
+      Alert.alert("Location unavailable", "Continuing with fallback coordinates.");
+    }
 
     const user = {
       user_id: randomId(),
@@ -185,10 +212,17 @@ export default function App() {
       arrived: false,
     };
 
-    socket.removeAllListeners();
-    attachSocketHandlers(socket);
+    try {
+      const socket = connectSocket();
+      socketRef.current = socket;
 
-    socket.emit("register_user", user);
+      socket.removeAllListeners();
+      attachSocketHandlers(socket);
+      socket.emit("register_user", user);
+    } catch {
+      Alert.alert("Offline mode", "Could not reach server. Joined local session mode.");
+    }
+
     setMe(user);
     setScreen("main");
   }

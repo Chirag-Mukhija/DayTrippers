@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function LoginScreen({ onSubmit }) {
   const [name, setName] = useState("");
@@ -35,7 +35,10 @@ export default function LoginScreen({ onSubmit }) {
       <Pressable
         style={styles.button}
         onPress={() => {
-          if (!name.trim()) return;
+          if (!name.trim()) {
+            Alert.alert("Name required", "Please enter your name to join the session.");
+            return;
+          }
           onSubmit({ name: name.trim(), role });
         }}
       >
