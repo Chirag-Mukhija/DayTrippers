@@ -62,6 +62,21 @@ def normalize_expo_push_token(value) -> Optional[str]:
     return None
 
 
+def normalize_supplies(value) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    out: List[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if not text:
+            continue
+        if text not in out:
+            out.append(text)
+    return out[:20]
+
+
 def send_expo_push_notifications(payload: dict) -> None:
     tokens = sorted(expo_push_tokens)
     if not tokens:
@@ -150,6 +165,7 @@ def public_user_view(user: dict) -> dict:
         "role": user["role"],
         "lat": user.get("lat"),
         "lon": user.get("lon"),
+        "supplies": normalize_supplies(user.get("supplies", [])),
         "arrived": user.get("arrived", False),
         "connected": True,
         "last_seen": user.get("last_seen"),
@@ -234,6 +250,7 @@ def on_register_user(data):
         "role": data.get("role", "survivor"),
         "lat": as_float_or_none(data.get("lat")),
         "lon": as_float_or_none(data.get("lon")),
+        "supplies": normalize_supplies(data.get("supplies", [])),
         "arrived": data.get("arrived", False),
         "expo_push_token": expo_push_token,
         "connected": True,
@@ -359,14 +376,52 @@ def on_send_chat(data):
         socketio.emit("chat_link_created", {"a": a, "b": b})
 
 
+@socketio.on("update_supplies")
+def on_update_supplies(data):
+    user_id = data.get("user_id")
+    user = users_by_id.get(user_id)
+    if not user:
+        return
+
+    # Ensure only the same socket can update this user profile.
+    if user.get("sid") != request.sid:
+        return
+
+    previous_supplies = normalize_supplies(user.get("supplies", []))
+    next_supplies = normalize_supplies(data.get("supplies", []))
+    user["supplies"] = next_supplies
+    user["last_seen"] = int(time.time())
+
+    added_supplies = [item for item in next_supplies if item not in previous_supplies]
+    if added_supplies:
+        socketio.emit(
+            "supplies_update_broadcast",
+            {
+                "user_id": user_id,
+                "user_name": user.get("name", "Unknown"),
+                "added_supplies": added_supplies,
+                "supplies": next_supplies,
+                "ts": int(time.time()),
+            },
+        )
+
+    broadcast_presence()
+
+
 @socketio.on("drop_beacon")
 def on_drop_beacon(data):
     beacon_id = str(uuid.uuid4())
+    supply_type = str(data.get("supply_type", "Mixed Supplies")).strip() or "Mixed Supplies"
+    quantity = str(data.get("quantity", "")).strip()
+    note = str(data.get("note", "Supplies dropped here")).strip() or "Supplies dropped here"
+
     beacon = {
         "beacon_id": beacon_id,
         "lat": data.get("lat"),
         "lon": data.get("lon"),
-        "note": data.get("note", "Supplies dropped here"),
+        "supply_type": supply_type,
+        "quantity": quantity,
+        "note": note,
         "dropped_by": data.get("rescuer_id"),
         "ts": int(time.time()),
     }

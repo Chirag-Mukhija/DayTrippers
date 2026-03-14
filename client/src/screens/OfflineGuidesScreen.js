@@ -3,50 +3,9 @@ import { FlatList, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } 
 import { WebView } from "react-native-webview";
 import { OFFLINE_WIKI_ARTICLES } from "../data/offlineWiki";
 
-const GUIDES = [
-  {
-    id: "cpr",
-    title: "CPR Basics",
-    keywords: "cpr breathing pulse chest compression",
-    file: require("../../assets/offline-guides/cpr.html"),
-  },
-  {
-    id: "burn",
-    title: "Burn Care",
-    keywords: "burn water sterile dressing",
-    file: require("../../assets/offline-guides/burns.html"),
-  },
-  {
-    id: "earthquake",
-    title: "Earthquake Survival",
-    keywords: "earthquake drop cover hold",
-    file: require("../../assets/offline-guides/earthquake.html"),
-  },
-  {
-    id: "water",
-    title: "Find Safe Water",
-    keywords: "water boil filter purify",
-    file: require("../../assets/offline-guides/water.html"),
-  },
-  {
-    id: "signal",
-    title: "Signal Rescuers",
-    keywords: "signal flashlight mirror whistle",
-    file: require("../../assets/offline-guides/signaling.html"),
-  },
-];
-
 export default function OfflineGuidesScreen({ onBack }) {
-  const [activeTab, setActiveTab] = useState("guides");
   const [query, setQuery] = useState("");
-  const [selectedGuide, setSelectedGuide] = useState(null);
   const [selectedWikiArticle, setSelectedWikiArticle] = useState(null);
-
-  const filteredGuides = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return GUIDES;
-    return GUIDES.filter((g) => (`${g.title} ${g.keywords}`).toLowerCase().includes(q));
-  }, [query]);
 
   const filteredWiki = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -133,25 +92,6 @@ export default function OfflineGuidesScreen({ onBack }) {
     `;
   }
 
-  if (selectedGuide) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.readerTitle}>{selectedGuide.title}</Text>
-        <WebView
-          source={selectedGuide.file}
-          style={styles.webview}
-          originWhitelist={["*"]}
-          allowFileAccess={true}
-          allowFileAccessFromFileURLs={true}
-          allowUniversalAccessFromFileURLs={true}
-        />
-        <Pressable style={styles.backBtnSecondary} onPress={() => setSelectedGuide(null)}>
-          <Text style={styles.backText}>Back To Library</Text>
-        </Pressable>
-      </SafeAreaView>
-    );
-  }
-
   if (selectedWikiArticle) {
     return (
       <SafeAreaView style={styles.container}>
@@ -172,68 +112,37 @@ export default function OfflineGuidesScreen({ onBack }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.heroBadge}>OFFLINE READY</Text>
-        <Text style={styles.title}>Survival + Wikipedia Library</Text>
+        <Text style={styles.title}>Offline Knowledge Base</Text>
         <Text style={styles.subtitle}>
-          Browse lifesaving guides and encyclopedia-style emergency knowledge without internet.
+          Search encyclopedia-style survival, medical, navigation, and fieldcraft topics without internet.
         </Text>
-      </View>
-
-      <View style={styles.tabRow}>
-        <Pressable
-          style={[styles.tabBtn, activeTab === "guides" && styles.tabBtnActive]}
-          onPress={() => {
-            setActiveTab("guides");
-            setQuery("");
-          }}
-        >
-          <Text style={[styles.tabText, activeTab === "guides" && styles.tabTextActive]}>Guides</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.tabBtn, activeTab === "wiki" && styles.tabBtnActive]}
-          onPress={() => {
-            setActiveTab("wiki");
-            setQuery("");
-          }}
-        >
-          <Text style={[styles.tabText, activeTab === "wiki" && styles.tabTextActive]}>Offline Wikipedia</Text>
-        </Pressable>
       </View>
 
       <TextInput
         style={styles.input}
-        placeholder={activeTab === "guides" ? "Search guides" : "Search wiki topics"}
+        placeholder="Search offline topics"
         value={query}
         onChangeText={setQuery}
       />
 
-      {activeTab === "wiki" ? (
-        <View style={styles.wikiNoteCard}>
-          <Text style={styles.wikiNoteTitle}>Offline Wikipedia (Lite)</Text>
-          <Text style={styles.wikiNoteText}>
-            Curated emergency encyclopedia articles are bundled locally for fast offline access.
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.wikiNoteCard}>
+        <Text style={styles.wikiNoteTitle}>Offline Wikipedia</Text>
+        <Text style={styles.wikiNoteText}>
+          Disaster, medical, fieldcraft, navigation, communication, and practical survival topics are bundled locally for fully offline search.
+        </Text>
+      </View>
 
       <FlatList
-        data={activeTab === "guides" ? filteredGuides : filteredWiki}
+        data={filteredWiki}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <Pressable
             style={styles.card}
-            onPress={() => {
-              if (activeTab === "guides") {
-                setSelectedGuide(item);
-              } else {
-                setSelectedWikiArticle(item);
-              }
-            }}
+            onPress={() => setSelectedWikiArticle(item)}
           >
             <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardDesc}>
-              {activeTab === "guides" ? "Open offline survival guide" : item.summary}
-            </Text>
+            <Text style={styles.cardDesc}>{item.summary}</Text>
           </Pressable>
         )}
       />
@@ -276,29 +185,6 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     fontSize: 14,
     lineHeight: 20,
-  },
-  tabRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 10,
-  },
-  tabBtn: {
-    flex: 1,
-    backgroundColor: "#e2e8f0",
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  tabBtnActive: {
-    backgroundColor: "#1d4ed8",
-  },
-  tabText: {
-    color: "#0f172a",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  tabTextActive: {
-    color: "#fff",
   },
   input: {
     backgroundColor: "white",

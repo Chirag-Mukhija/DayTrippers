@@ -239,4 +239,436 @@ export const OFFLINE_WIKI_ARTICLES = [
       },
     ],
   },
+  {
+    id: "wiki-improvised-lighting",
+    title: "Improvised Lighting",
+    keywords: "torch wick cloth kerosene lamp light fire safety",
+    summary:
+      "Low-tech methods for temporary light in outages, with strong fire-safety precautions.",
+    sections: [
+      {
+        heading: "Safer First Choices",
+        body:
+          "Prefer battery lights, hand-crank lamps, and solar lanterns before open flames. Keep spare cells dry and labelled by charge state.",
+      },
+      {
+        heading: "Improvised Wick Light",
+        body:
+          "If no alternatives exist, a simple wick-in-fuel setup can provide short-term light. Use stable non-tip container, small wick exposure, and keep clear from fabric, tents, and children.",
+      },
+      {
+        heading: "Critical Safety",
+        body:
+          "Never refill near flame. Ventilate enclosed spaces. Keep extinguishing water/sand nearby. Treat kerosene and similar fuels as hazardous and store in sealed labelled containers.",
+      },
+    ],
+  },
+  {
+    id: "wiki-compass-navigation",
+    title: "Compass Navigation",
+    keywords: "bearing azimuth orient map north route",
+    summary:
+      "Basic compass use helps maintain direction when GPS or mobile network is unavailable.",
+    sections: [
+      {
+        heading: "Core Idea",
+        body:
+          "Orient the compass to magnetic north, set a bearing toward your destination, then move while keeping the needle aligned.",
+      },
+      {
+        heading: "Practical Workflow",
+        body:
+          "Pick near checkpoints, walk to each point, and reassess. This reduces drift from obstacles and poor visibility.",
+      },
+      {
+        heading: "Error Sources",
+        body:
+          "Metal objects, power lines, and some rocks can affect readings. Keep compass away from phones and tools while taking bearings.",
+      },
+    ],
+  },
+  {
+    id: "wiki-map-reading",
+    title: "Map Reading",
+    keywords: "legend contour scale terrain route",
+    summary:
+      "Understanding map symbols and terrain lines enables safer route planning in disrupted areas.",
+    sections: [
+      {
+        heading: "Must Know",
+        body:
+          "Read scale, legend, and north direction first. Contour spacing shows steepness, and map symbols indicate roads, water, and structures.",
+      },
+      {
+        heading: "Route Choice",
+        body:
+          "Favor routes with multiple exits, reliable landmarks, and lower flood or landslide exposure.",
+      },
+      {
+        heading: "Checkpoint Method",
+        body:
+          "Break long movement into smaller checkpoints and verify position often to avoid compounding navigation errors.",
+      },
+    ],
+  },
+  {
+    id: "wiki-knots",
+    title: "Useful Knots",
+    keywords: "bowline clove hitch square knot rope shelter",
+    summary:
+      "A few reliable knots can secure shelters, splints, tarps, and supply bundles.",
+    sections: [
+      {
+        heading: "High Value Knots",
+        body:
+          "Bowline for fixed loop, clove hitch for temporary attachment, and square knot for joining similar rope ends.",
+      },
+      {
+        heading: "Load Safety",
+        body:
+          "Test knots under expected load before relying on them. Wet or synthetic rope can slip more easily.",
+      },
+      {
+        heading: "Good Practice",
+        body:
+          "Leave sufficient tail length and inspect frequently where vibration or movement is constant.",
+      },
+    ],
+  },
+  {
+    id: "wiki-basic-splinting",
+    title: "Basic Splinting",
+    keywords: "fracture immobilize limb pain swelling",
+    summary:
+      "Splinting reduces movement of suspected fractures and can reduce pain and further damage.",
+    sections: [
+      {
+        heading: "When To Splint",
+        body:
+          "Use for painful, deformed, or unstable limbs when evacuation is delayed and trained care is not immediately available.",
+      },
+      {
+        heading: "Principle",
+        body:
+          "Immobilize joints above and below injury using firm support and soft padding. Re-check circulation after securing.",
+      },
+      {
+        heading: "Warnings",
+        body:
+          "Do not force realignment. If severe bleeding or absent pulse occurs, prioritize urgent transport.",
+      },
+    ],
+  },
+  {
+    id: "wiki-wound-cleaning",
+    title: "Wound Cleaning",
+    keywords: "irrigation clean dressing infection",
+    summary:
+      "Early cleaning and covering of wounds reduces infection risk in field environments.",
+    sections: [
+      {
+        heading: "Cleaning Steps",
+        body:
+          "Wash hands, irrigate with safe clean water, remove visible debris carefully, and apply sterile dressing if available.",
+      },
+      {
+        heading: "What To Avoid",
+        body:
+          "Avoid harsh chemicals directly in deep wounds unless specifically indicated by medical guidance.",
+      },
+      {
+        heading: "Monitor",
+        body:
+          "Watch for redness, swelling, pus, fever, increasing pain, or foul odor and seek medical care when possible.",
+      },
+    ],
+  },
+  {
+    id: "wiki-emergency-cooking",
+    title: "Emergency Cooking",
+    keywords: "stove fuel boil sanitation food safety",
+    summary:
+      "Cooking safely without grid power requires controlled heat, ventilation, and contamination prevention.",
+    sections: [
+      {
+        heading: "Heat Sources",
+        body:
+          "Use camp stoves or approved solid-fuel systems where possible. Keep setup on stable, nonflammable surfaces.",
+      },
+      {
+        heading: "Food Safety",
+        body:
+          "Cook thoroughly, avoid cross-contamination, and consume perishables first if refrigeration is compromised.",
+      },
+      {
+        heading: "Ventilation",
+        body:
+          "Do not use combustion stoves in sealed spaces due to carbon monoxide risk.",
+      },
+    ],
+  },
+  {
+    id: "wiki-power-bank-care",
+    title: "Power Bank Management",
+    keywords: "battery charging usb ration power",
+    summary:
+      "Disciplined battery use extends communication uptime during outages.",
+    sections: [
+      {
+        heading: "Conservation",
+        body:
+          "Lower screen brightness, disable background apps, and use airplane mode when not transmitting.",
+      },
+      {
+        heading: "Charging Priority",
+        body:
+          "Charge mission-critical devices first: communication nodes, medical sensors, and navigation tools.",
+      },
+      {
+        heading: "Storage",
+        body:
+          "Keep batteries away from heat and moisture. Damaged or swollen packs should be isolated and not used.",
+      },
+    ],
+  },
+  {
+    id: "wiki-radio-basics",
+    title: "Two-Way Radio Basics",
+    keywords: "vhf uhf push-to-talk channel etiquette",
+    summary:
+      "Simple radio discipline can dramatically improve rescue coordination.",
+    sections: [
+      {
+        heading: "Message Format",
+        body:
+          "Use concise structure: who you are, where you are, what you need. Keep transmissions short and clear.",
+      },
+      {
+        heading: "Operating Tips",
+        body:
+          "Pause before speaking after pressing push-to-talk, and avoid talking over other transmissions.",
+      },
+      {
+        heading: "Battery Strategy",
+        body:
+          "Use low power settings when nearby and reserve high power for long-range calls.",
+      },
+    ],
+  },
+  {
+    id: "wiki-sanitation-camp",
+    title: "Camp Sanitation",
+    keywords: "latrine hygiene disease waste water",
+    summary:
+      "Basic hygiene planning in temporary camps prevents outbreaks and protects vulnerable groups.",
+    sections: [
+      {
+        heading: "Layout",
+        body:
+          "Separate sleeping, cooking, waste, and washing zones. Keep water sources uphill and away from waste pits.",
+      },
+      {
+        heading: "Hand Hygiene",
+        body:
+          "Handwashing with soap or sanitizer before food prep and after toilet use is one of the highest-impact measures.",
+      },
+      {
+        heading: "Waste Handling",
+        body:
+          "Use covered bins and daily disposal routine. Isolate medical waste from general trash.",
+      },
+    ],
+  },
+  {
+    id: "wiki-stress-first-aid",
+    title: "Psychological First Aid",
+    keywords: "stress panic trauma support listen calm",
+    summary:
+      "Early emotional support after disasters helps people regain stability and decision-making capacity.",
+    sections: [
+      {
+        heading: "Immediate Approach",
+        body:
+          "Ensure safety, listen without pressure, and provide simple practical help before discussing complex emotions.",
+      },
+      {
+        heading: "Do",
+        body:
+          "Use calm tone, clear information, and reconnect people with family or trusted contacts where possible.",
+      },
+      {
+        heading: "Do Not",
+        body:
+          "Avoid forcing people to retell traumatic events or making promises you cannot keep.",
+      },
+    ],
+  },
+  {
+    id: "wiki-search-rescue-signals",
+    title: "Search and Rescue Signals",
+    keywords: "signal whistle mirror ground to air sos",
+    summary:
+      "Clear, repeatable distress signals increase the chance of being spotted by teams and aircraft.",
+    sections: [
+      {
+        heading: "Audio Signals",
+        body:
+          "Use whistle or horn in repeated sets with pauses. Whistles are more energy-efficient than shouting.",
+      },
+      {
+        heading: "Visual Signals",
+        body:
+          "High-contrast symbols in open ground, reflective mirrors in daylight, and controlled lights at night help attract attention.",
+      },
+      {
+        heading: "Message Clarity",
+        body:
+          "When possible include count of injured, urgent needs, and safe approach path for rescuers.",
+      },
+    ],
+  },
+  {
+    id: "wiki-urban-evacuation",
+    title: "Urban Evacuation",
+    keywords: "route planning choke points crowd movement",
+    summary:
+      "Evacuating dense urban areas requires attention to bottlenecks, structural hazards, and communication failures.",
+    sections: [
+      {
+        heading: "Route Planning",
+        body:
+          "Pre-identify primary and alternate routes. Avoid underpasses and narrow choke points during panic movement.",
+      },
+      {
+        heading: "Group Discipline",
+        body:
+          "Move in small accountable groups with rendezvous points and periodic headcounts.",
+      },
+      {
+        heading: "Priority Cases",
+        body:
+          "Assign support to children, elderly persons, and mobility-impaired people before movement starts.",
+      },
+    ],
+  },
+  {
+    id: "wiki-fire-extinguisher-basics",
+    title: "Fire Extinguisher Basics",
+    keywords: "pass method class a b c electrical",
+    summary:
+      "Understanding extinguisher type and quick-use method can stop small fires before escalation.",
+    sections: [
+      {
+        heading: "PASS Method",
+        body:
+          "Pull pin, Aim at base of fire, Squeeze handle, Sweep side to side.",
+      },
+      {
+        heading: "Type Selection",
+        body:
+          "Use correct class for material involved. Electrical fires require non-conductive extinguishing agents.",
+      },
+      {
+        heading: "Retreat Rule",
+        body:
+          "If fire grows, smoke thickens, or one extinguisher is insufficient, evacuate and call emergency responders.",
+      },
+    ],
+  },
+  {
+    id: "wiki-first-aid-kit-priorities",
+    title: "First Aid Kit Priorities",
+    keywords: "bandage antiseptic gloves gauze meds",
+    summary:
+      "A practical first-aid kit balances wound care, infection control, and common symptom treatment.",
+    sections: [
+      {
+        heading: "Core Components",
+        body:
+          "Gloves, gauze, roller bandage, adhesive tape, antiseptic, triangular bandage, scissors, and pain relief basics.",
+      },
+      {
+        heading: "Context Additions",
+        body:
+          "In hot climates include oral rehydration and electrolyte options. In cold zones include thermal wraps.",
+      },
+      {
+        heading: "Maintenance",
+        body:
+          "Check expiry dates, restock after use, and keep kit packed in water-resistant containers.",
+      },
+    ],
+  },
+  {
+    id: "wiki-safe-food-storage",
+    title: "Safe Food Storage",
+    keywords: "dry ration contamination pests shelf life",
+    summary:
+      "Storage discipline protects food quality and prevents avoidable illness when supply chains are unstable.",
+    sections: [
+      {
+        heading: "Storage Conditions",
+        body:
+          "Keep food cool, dry, and sealed. Elevate from ground and protect from rodents and insects.",
+      },
+      {
+        heading: "Rotation",
+        body:
+          "Use oldest stock first and label date of arrival. This reduces waste and surprises.",
+      },
+      {
+        heading: "High-Risk Items",
+        body:
+          "Dairy, meat, and cooked rice are high-risk without refrigeration and should be consumed quickly.",
+      },
+    ],
+  },
+  {
+    id: "wiki-diy-water-carry",
+    title: "Field Water Carry Methods",
+    keywords: "container transport ration canteen",
+    summary:
+      "Moving safe water efficiently improves endurance and reduces risky repeated trips.",
+    sections: [
+      {
+        heading: "Container Strategy",
+        body:
+          "Use multiple medium containers rather than one heavy load to reduce spill and injury risk.",
+      },
+      {
+        heading: "Marking",
+        body:
+          "Clearly separate untreated and treated water containers to prevent accidental mixing.",
+      },
+      {
+        heading: "Rationing",
+        body:
+          "Plan by activity and weather, prioritizing drinking and oral rehydration before cooking uses.",
+      },
+    ],
+  },
+  {
+    id: "wiki-lighting-safety",
+    title: "Night Lighting Safety",
+    keywords: "night travel lantern reflective visibility",
+    summary:
+      "Proper lighting improves safety, team coordination, and injury prevention after dark.",
+    sections: [
+      {
+        heading: "Layered Lighting",
+        body:
+          "Use area light for camp tasks and directional lights for movement. Keep spare batteries on a fixed inventory cycle.",
+      },
+      {
+        heading: "Visibility",
+        body:
+          "Reflective strips and marker lights help teams identify each other and reduce collision risk in low visibility.",
+      },
+      {
+        heading: "Fire Discipline",
+        body:
+          "If open flame is used, assign a watcher and set a strict extinguish protocol before sleep.",
+      },
+    ],
+  },
 ];

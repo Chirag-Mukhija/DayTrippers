@@ -29,6 +29,9 @@ function normalizeUserCoords(user) {
     ...user,
     lat: toNumberOrNull(user.lat),
     lon: toNumberOrNull(user.lon),
+    supplies: Array.isArray(user.supplies)
+      ? user.supplies.filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim())
+      : [],
   };
 }
 
@@ -49,6 +52,7 @@ export default function App() {
   const beepIntervalRef = useRef(null);
   const sirenSoundRef = useRef(null);
   const pushTokenRef = useRef(null);
+  const toastTimeoutRef = useRef(null);
   const meRef = useRef(null);
   const [screen, setScreen] = useState("login");
   const [me, setMe] = useState(null);
@@ -65,6 +69,7 @@ export default function App() {
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [cameraPermissionGranted, setCameraPermissionGranted] = useState(false);
   const [isInteractionLocked, setIsInteractionLocked] = useState(false);
+  const [toastText, setToastText] = useState("");
 
   useEffect(() => {
     async function setupNotifications() {
@@ -82,6 +87,14 @@ export default function App() {
             sound: "default",
             lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           });
+        }
+
+        // Expo Go no longer supports remote push tokens for Android (SDK 53+).
+        // Local notifications still work; remote push requires a development build.
+        const isExpoGo =
+          Constants?.appOwnership === "expo" || Constants?.executionEnvironment === "storeClient";
+        if (isExpoGo) {
+          return;
         }
 
         let pushToken = null;
@@ -236,12 +249,26 @@ export default function App() {
       disconnectSocket();
       locationSubscriptionRef.current?.remove();
       stopFlashSignals();
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
       if (sirenSoundRef.current) {
         sirenSoundRef.current.unloadAsync();
         sirenSoundRef.current = null;
       }
     };
   }, []);
+
+  function showToast(message) {
+    if (!message) return;
+    setToastText(message);
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastText("");
+    }, 3500);
+  }
 
   useEffect(() => {
     if (!me || screen === "login" || screen === "guides") return;
@@ -357,6 +384,13 @@ export default function App() {
         const senderName = payload.from_user_name || payload.from_user_id?.slice(0, 6) || "Unknown";
         Alert.alert("New Message", `${senderName}: ${payload.text}`);
       }
+    });
+
+    socket.on("supplies_update_broadcast", (payload) => {
+      const name = payload?.user_name || "A survivor";
+      const items = Array.isArray(payload?.added_supplies) ? payload.added_supplies : [];
+      if (!items.length) return;
+      showToast(`${name} has got: ${items.join(", ")}`);
     });
   }
 
@@ -487,7 +521,17 @@ export default function App() {
       rescuer_id: meInUsers.user_id,
       lat: point.lat,
       lon: point.lon,
-      note: "Supplies dropped",
+      supply_type: point.supplyType || "Mixed Supplies",
+      quantity: point.quantity || "",
+      note: point.note || "Supplies dropped",
+    });
+  }
+
+  function updateMySupplies(supplies) {
+    if (!meInUsers) return;
+    socketRef.current?.emit("update_supplies", {
+      user_id: meInUsers.user_id,
+      supplies,
     });
   }
 
@@ -537,6 +581,7 @@ export default function App() {
         activeFlashTargets={activeFlashTargets}
         onSendChat={sendChat}
         onDropBeacon={dropBeacon}
+        onUpdateMySupplies={updateMySupplies}
         onFlashlightPing={pingFlashlight}
         onStopFlashlight={stopFlashlight}
         onBroadcastEvacuation={broadcastEvacuation}
@@ -566,6 +611,13 @@ export default function App() {
         <View style={styles.lockOverlay}>
           <Text style={styles.lockTitle}>Emergency Flash Alert</Text>
           <Text style={styles.lockText}>Do not use the app. Stay visible for the rescuer.</Text>
+        </View>
+      ) : null}
+      {toastText ? (
+        <View pointerEvents="none" style={styles.toastWrap}>
+          <View style={styles.toastCard}>
+            <Text style={styles.toastText}>{toastText}</Text>
+          </View>
         </View>
       ) : null}
     </SafeAreaView>
@@ -611,5 +663,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     textAlign: "center",
+  },
+  toastWrap: {
+    position: "absolute",
+    top: 58,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 9999,
+  },
+  toastCard: {
+    maxWidth: "92%",
+    backgroundColor: "rgba(15, 23, 42, 0.94)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  toastText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
   },
 });
