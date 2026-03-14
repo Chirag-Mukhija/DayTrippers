@@ -18,7 +18,8 @@
         {
           "cameraPermission": "Allow RescueMesh to use camera hardware for emergency flashlight ping."
         }
-      ]
+      ],
+      "expo-notifications"
     ]
   }
 }

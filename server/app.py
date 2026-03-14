@@ -8,6 +8,9 @@ import math
 import random
 import time
 import uuid
+import json
+import urllib.request
+import urllib.error
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -40,6 +43,7 @@ chat_links: Set[Tuple[str, str]] = set()
 beacons: Dict[str, dict] = {}
 evacuation_message: Optional[dict] = None
 active_flash_targets: Set[str] = set()
+expo_push_tokens: Set[str] = set()
 
 
 def as_float_or_none(value):
@@ -47,6 +51,50 @@ def as_float_or_none(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def normalize_expo_push_token(value) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    token = value.strip()
+    if token.startswith("ExponentPushToken[") and token.endswith("]"):
+        return token
+    return None
+
+
+def send_expo_push_notifications(payload: dict) -> None:
+    tokens = sorted(expo_push_tokens)
+    if not tokens:
+        return
+
+    messages = [
+        {
+            "to": token,
+            "title": "Disaster Alert",
+            "body": f"{payload.get('type', 'Emergency')} alert. {payload.get('countdown_s', 20)}s countdown started.",
+            "sound": "default",
+            "priority": "high",
+            "channelId": "disaster-alerts",
+            "data": payload,
+        }
+        for token in tokens
+    ]
+
+    try:
+        req = urllib.request.Request(
+            "https://exp.host/--/api/v2/push/send",
+            data=json.dumps(messages).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8):
+            pass
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        # Keep socket broadcast working even when push API is unreachable.
+        return
 
 
 def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -149,6 +197,7 @@ def trigger_disaster():
         "timestamp": int(time.time()),
     }
     socketio.emit("disaster_alert", payload)
+    send_expo_push_notifications(payload)
     return jsonify({"sent": True, "payload": payload})
 
 
@@ -178,6 +227,7 @@ def on_disconnect():
 @socketio.on("register_user")
 def on_register_user(data):
     user_id = data.get("user_id") or str(uuid.uuid4())
+    expo_push_token = normalize_expo_push_token(data.get("expo_push_token"))
     user = {
         "user_id": user_id,
         "name": data.get("name", f"User-{user_id[:5]}"),
@@ -185,10 +235,14 @@ def on_register_user(data):
         "lat": as_float_or_none(data.get("lat")),
         "lon": as_float_or_none(data.get("lon")),
         "arrived": data.get("arrived", False),
+        "expo_push_token": expo_push_token,
         "connected": True,
         "sid": request.sid,
         "last_seen": int(time.time()),
     }
+
+    if expo_push_token:
+        expo_push_tokens.add(expo_push_token)
 
     users_by_id[user_id] = user
     users_by_sid[request.sid] = user_id
@@ -206,6 +260,21 @@ def on_register_user(data):
         },
     )
     broadcast_presence()
+
+
+@socketio.on("update_push_token")
+def on_update_push_token(data):
+    uid = data.get("user_id")
+    user = users_by_id.get(uid)
+    if not user:
+        return
+
+    token = normalize_expo_push_token(data.get("expo_push_token"))
+    if not token:
+        return
+
+    user["expo_push_token"] = token
+    expo_push_tokens.add(token)
 
 
 @socketio.on("location_update")

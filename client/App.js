@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
+import { Alert, Platform, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
 import * as Location from "expo-location";
 import { Camera, CameraView } from "expo-camera";
 import { Audio } from "expo-av";
+import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoginScreen from "./src/screens/LoginScreen";
 import DisasterAlertScreen from "./src/screens/DisasterAlertScreen";
@@ -30,6 +32,15 @@ function normalizeUserCoords(user) {
   };
 }
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 export default function App() {
   const socketRef = useRef(null);
   const locationSubscriptionRef = useRef(null);
@@ -37,6 +48,7 @@ export default function App() {
   const flashStrobeIntervalRef = useRef(null);
   const beepIntervalRef = useRef(null);
   const sirenSoundRef = useRef(null);
+  const pushTokenRef = useRef(null);
   const meRef = useRef(null);
   const [screen, setScreen] = useState("login");
   const [me, setMe] = useState(null);
@@ -53,6 +65,54 @@ export default function App() {
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [cameraPermissionGranted, setCameraPermissionGranted] = useState(false);
   const [isInteractionLocked, setIsInteractionLocked] = useState(false);
+
+  useEffect(() => {
+    async function setupNotifications() {
+      try {
+        const existing = await Notifications.getPermissionsAsync();
+        if (existing.status !== "granted") {
+          await Notifications.requestPermissionsAsync();
+        }
+
+        if (Platform.OS === "android") {
+          await Notifications.setNotificationChannelAsync("disaster-alerts", {
+            name: "Disaster Alerts",
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            sound: "default",
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          });
+        }
+
+        let pushToken = null;
+        const projectId =
+          Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+
+        try {
+          const tokenResponse = await Notifications.getExpoPushTokenAsync(
+            projectId ? { projectId } : undefined
+          );
+          pushToken = tokenResponse?.data || null;
+        } catch {
+          pushToken = null;
+        }
+
+        if (pushToken) {
+          pushTokenRef.current = pushToken;
+          if (meRef.current?.user_id && socketRef.current) {
+            socketRef.current.emit("update_push_token", {
+              user_id: meRef.current.user_id,
+              expo_push_token: pushToken,
+            });
+          }
+        }
+      } catch {
+        // Notification setup failures should not block app usage.
+      }
+    }
+
+    setupNotifications();
+  }, []);
 
   useEffect(() => {
     let id;
@@ -228,7 +288,21 @@ export default function App() {
       );
     });
 
-    socket.on("disaster_alert", (payload) => {
+    socket.on("disaster_alert", async (payload) => {
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Disaster Alert",
+            body: `${payload?.type || "Emergency"} alert. ${payload?.countdown_s || 20}s countdown started.`,
+            sound: "default",
+            data: payload || {},
+          },
+          trigger: null,
+        });
+      } catch {
+        // Keep in-app behavior even if notification scheduling fails.
+      }
+
       if (meRef.current?.role === "rescuer") {
         return;
       }
@@ -363,6 +437,7 @@ export default function App() {
       lat: toNumberOrNull(initialLocation.lat),
       lon: toNumberOrNull(initialLocation.lon),
       arrived: false,
+      expo_push_token: pushTokenRef.current,
     };
 
     // Set user refs early to avoid role-based event races right after socket connection.
