@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, SafeAreaView, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
+import { Alert, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
 import * as Location from "expo-location";
+import { SafeAreaView } from "react-native-safe-area-context";
 import LoginScreen from "./src/screens/LoginScreen";
 import DisasterAlertScreen from "./src/screens/DisasterAlertScreen";
 import SafeZoneScreen from "./src/screens/SafeZoneScreen";

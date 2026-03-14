@@ -19,13 +19,13 @@ python app.py
 
 Server runs on:
 
-- Socket/HTTP: `http://0.0.0.0:5000`
-- Admin panel: `http://<laptop-ip>:5000/`
-- Health: `http://<laptop-ip>:5000/health`
+- Socket/HTTP: `http://0.0.0.0:8888`
+- Admin panel: `http://<laptop-ip>:8888/`
+- Health: `http://<laptop-ip>:8888/health`
 
 ### 2) Client
 
-1. Open `client/src/config.js` and set `SERVER_URL` to your laptop IP (example: `http://192.168.1.23:5000`).
+1. Open `client/src/config.js` and set `SERVER_URL` to your laptop IP (example: `http://192.168.1.23:8888`).
 2. Run:
 
 ```bash

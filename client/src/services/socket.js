@@ -9,7 +9,7 @@ export function connectSocket() {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 10,
-      timeout: 5000,
+      timeout: 8888,
     });
   }
   return socket;

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Asset } from "expo-asset";
+import * as FileSystem from "expo-file-system";
 import { WebView } from "react-native-webview";
 
 const GUIDES = [
@@ -39,7 +40,7 @@ const GUIDES = [
 export default function OfflineGuidesScreen({ onBack }) {
   const [query, setQuery] = useState("");
   const [selectedGuide, setSelectedGuide] = useState(null);
-  const [guideUri, setGuideUri] = useState("");
+  const [guideHtml, setGuideHtml] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -50,7 +51,7 @@ export default function OfflineGuidesScreen({ onBack }) {
   useEffect(() => {
     let active = true;
     if (!selectedGuide) {
-      setGuideUri("");
+      setGuideHtml("");
       return () => {
         active = false;
       };
@@ -59,13 +60,22 @@ export default function OfflineGuidesScreen({ onBack }) {
     const asset = Asset.fromModule(selectedGuide.file);
     asset
       .downloadAsync()
-      .then(() => {
+      .then(async () => {
         if (!active) return;
-        setGuideUri(asset.localUri || asset.uri || "");
+        const localUri = asset.localUri || asset.uri;
+        if (!localUri) {
+          setGuideHtml("");
+          return;
+        }
+        const html = await FileSystem.readAsStringAsync(localUri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        if (!active) return;
+        setGuideHtml(html);
       })
       .catch(() => {
         if (!active) return;
-        setGuideUri("");
+        setGuideHtml("");
       });
 
     return () => {
@@ -77,7 +87,11 @@ export default function OfflineGuidesScreen({ onBack }) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>{selectedGuide.title}</Text>
-        {guideUri ? <WebView source={{ uri: guideUri }} style={styles.webview} /> : <Text>Loading guide...</Text>}
+        {guideHtml ? (
+          <WebView source={{ html: guideHtml }} style={styles.webview} originWhitelist={["*"]} />
+        ) : (
+          <Text>Loading guide...</Text>
+        )}
         <Pressable style={styles.backBtn} onPress={() => setSelectedGuide(null)}>
           <Text style={styles.backText}>Back To Library</Text>
         </Pressable>
