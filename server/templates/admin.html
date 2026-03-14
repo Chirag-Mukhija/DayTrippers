@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Disaster Admin Panel</title>
+  <style>
+    :root {
+      --bg: #fff7ed;
+      --ink: #1f2937;
+      --card: #ffedd5;
+      --accent: #dc2626;
+      --accent-2: #fb923c;
+      --ok: #15803d;
+      --border: #fdba74;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 20% 20%, #fed7aa 0%, transparent 30%),
+        radial-gradient(circle at 80% 0%, #fecaca 0%, transparent 35%),
+        linear-gradient(180deg, #fff7ed 0%, #fffbeb 100%);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .panel {
+      width: min(560px, 100%);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #fff7ed 0%, var(--card) 100%);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 16px 48px rgba(124, 45, 18, 0.15);
+    }
+    h1 {
+      margin: 0 0 8px;
+      letter-spacing: 0.4px;
+    }
+    p {
+      margin: 0 0 20px;
+      line-height: 1.5;
+    }
+    .row {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    label { font-weight: 600; }
+    input {
+      border: 1px solid #f97316;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 15px;
+    }
+    button {
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(180deg, var(--accent) 0%, #b91c1c 100%);
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 14px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      width: 100%;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(185, 28, 28, 0.25);
+    }
+    .status {
+      margin-top: 12px;
+      font-weight: 600;
+      min-height: 22px;
+      color: var(--ok);
+    }
+    .tiny {
+      margin-top: 16px;
+      opacity: 0.8;
+      font-size: 13px;
+    }
+    .stats {
+      margin-top: 14px;
+      border: 1px solid #fdba74;
+      background: #fff7ed;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Disaster Trigger Console</h1>
+    <p>Trigger Phase 0 alert to every connected device on local WiFi.</p>
+
+    <div class="row">
+      <label for="type">Disaster Type</label>
+      <input id="type" value="Earthquake" />
+    </div>
+
+    <div class="row">
+      <label for="countdown">Countdown (seconds)</label>
+      <input id="countdown" type="number" min="5" max="120" value="20" />
+    </div>
+
+    <button id="trigger">Trigger Global Alert</button>
+    <div id="status" class="status"></div>
+    <div class="stats">
+      <div>Connected Users: <strong id="connected">0</strong></div>
+      <div>Chat Links: <strong id="links">0</strong></div>
+      <div>Beacons: <strong id="beacons">0</strong></div>
+      <div class="mono" id="users"></div>
+    </div>
+    <div class="tiny">Server endpoint: POST /admin/trigger</div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const connectedEl = document.getElementById("connected");
+    const linksEl = document.getElementById("links");
+    const beaconsEl = document.getElementById("beacons");
+    const usersEl = document.getElementById("users");
+
+    async function triggerAlert() {
+      const type = document.getElementById("type").value || "Earthquake";
+      const countdown_s = Number(document.getElementById("countdown").value || 20);
+
+      statusEl.textContent = "Sending alert...";
+      const response = await fetch("/admin/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, countdown_s }),
+      });
+
+      if (!response.ok) {
+        statusEl.textContent = "Failed to send alert.";
+        return;
+      }
+
+      const body = await response.json();
+      statusEl.textContent = `Alert sent: ${body.payload.type}, ${body.payload.countdown_s}s countdown.`;
+    }
+
+    document.getElementById("trigger").addEventListener("click", () => {
+      triggerAlert().catch(() => {
+        statusEl.textContent = "Request error.";
+      });
+    });
+
+    async function refreshState() {
+      try {
+        const response = await fetch("/admin/state");
+        if (!response.ok) return;
+        const state = await response.json();
+
+        connectedEl.textContent = String(state.connected_users || 0);
+        linksEl.textContent = String((state.chat_links || []).length);
+        beaconsEl.textContent = String((state.beacons || []).length);
+
+        const preview = (state.users || [])
+          .slice(0, 6)
+          .map((u) => `${u.name} (${u.role}) @ ${u.lat ?? "-"},${u.lon ?? "-"}`)
+          .join(" | ");
+        usersEl.textContent = preview || "No users connected yet.";
+      } catch (_) {
+        // Keep UI silent on refresh failures.
+      }
+    }
+
+    refreshState();
+    setInterval(refreshState, 1500);
+  </script>
+</body>
+</html>
