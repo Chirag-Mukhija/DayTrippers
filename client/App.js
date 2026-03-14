@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Platform, StatusBar, StyleSheet, Text, Vibration, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { Camera, CameraView } from "expo-camera";
 import { Audio } from "expo-av";
@@ -13,6 +14,8 @@ import MainScreen from "./src/screens/MainScreen";
 import OfflineGuidesScreen from "./src/screens/OfflineGuidesScreen";
 import { connectSocket, disconnectSocket } from "./src/services/socket";
 import { LOCATION_PUSH_INTERVAL_MS, START_COORDS } from "./src/config";
+
+const USER_SESSION_KEY = "@rescuemesh/last_user";
 
 function randomId() {
   return `${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
@@ -55,6 +58,7 @@ export default function App() {
   const toastTimeoutRef = useRef(null);
   const meRef = useRef(null);
   const [screen, setScreen] = useState("login");
+  const [isSessionChecked, setIsSessionChecked] = useState(false);
   const [me, setMe] = useState(null);
   const [users, setUsers] = useState([]);
   const [chatLinks, setChatLinks] = useState([]);
@@ -453,6 +457,101 @@ export default function App() {
     };
   }
 
+  async function saveSessionUser(user) {
+    try {
+      await AsyncStorage.setItem(
+        USER_SESSION_KEY,
+        JSON.stringify({
+          user_id: user.user_id,
+          name: user.name,
+          role: user.role,
+        })
+      );
+    } catch {
+      // Session persistence failure should not block login.
+    }
+  }
+
+  function connectAndRegisterUser(user) {
+    const socket = connectSocket();
+    socketRef.current = socket;
+    socket.removeAllListeners();
+    attachSocketHandlers(socket);
+    socket.emit("register_user", user);
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    async function restoreSession() {
+      try {
+        const raw = await AsyncStorage.getItem(USER_SESSION_KEY);
+        if (!raw) {
+          if (active) {
+            setScreen("login");
+            setIsSessionChecked(true);
+          }
+          return;
+        }
+
+        const parsed = JSON.parse(raw);
+        if (!parsed?.user_id || !parsed?.name || !parsed?.role) {
+          await AsyncStorage.removeItem(USER_SESSION_KEY);
+          if (active) {
+            setScreen("login");
+            setIsSessionChecked(true);
+          }
+          return;
+        }
+
+        let initialLocation = {
+          lat: START_COORDS.lat,
+          lon: START_COORDS.lon,
+        };
+        try {
+          initialLocation = await initLiveLocation();
+        } catch {
+          // Keep fallback if live location is unavailable.
+        }
+
+        const user = {
+          user_id: parsed.user_id,
+          name: parsed.name,
+          role: parsed.role,
+          lat: toNumberOrNull(initialLocation.lat),
+          lon: toNumberOrNull(initialLocation.lon),
+          arrived: false,
+          expo_push_token: pushTokenRef.current,
+        };
+
+        if (!active) return;
+
+        meRef.current = user;
+        setMe(user);
+
+        try {
+          connectAndRegisterUser(user);
+        } catch {
+          Alert.alert("Offline mode", "Could not reach server. Restored local session mode.");
+        }
+        setScreen("main");
+      } catch {
+        if (active) {
+          setScreen("login");
+        }
+      } finally {
+        if (active) {
+          setIsSessionChecked(true);
+        }
+      }
+    }
+
+    restoreSession();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function handleJoin({ name, role }) {
     let initialLocation = {
       lat: START_COORDS.lat,
@@ -477,14 +576,10 @@ export default function App() {
     // Set user refs early to avoid role-based event races right after socket connection.
     meRef.current = user;
     setMe(user);
+    saveSessionUser(user);
 
     try {
-      const socket = connectSocket();
-      socketRef.current = socket;
-
-      socket.removeAllListeners();
-      attachSocketHandlers(socket);
-      socket.emit("register_user", user);
+      connectAndRegisterUser(user);
     } catch {
       Alert.alert("Offline mode", "Could not reach server. Joined local session mode.");
     }
@@ -562,7 +657,14 @@ export default function App() {
   }
 
   let content = null;
-  if (screen === "login") {
+  if (!isSessionChecked) {
+    content = (
+      <View style={styles.bootSplash}>
+        <Text style={styles.bootTitle}>RescueMesh</Text>
+        <Text style={styles.bootSubtitle}>Restoring session...</Text>
+      </View>
+    );
+  } else if (screen === "login") {
     content = <LoginScreen onSubmit={handleJoin} />;
   } else if (screen === "alert") {
     content = <DisasterAlertScreen alert={disasterAlert} onContinue={requestSafeZone} />;
@@ -625,6 +727,24 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  bootSplash: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0f172a",
+  },
+  bootTitle: {
+    color: "#fff",
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  bootSubtitle: {
+    marginTop: 8,
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   hiddenTorchCamera: {
     position: "absolute",
     width: 1,

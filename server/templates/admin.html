@@ -109,14 +109,9 @@
     <div class="row">
       <label for="type">Disaster Type</label>
       <select id="type">
-        <option value="Earthquake" selected>Earthquake</option>
-        <option value="Flood">Flood</option>
-        <option value="Cyclone">Cyclone</option>
-        <option value="Wildfire">Wildfire</option>
-        <option value="Landslide">Landslide</option>
-        <option value="Tsunami">Tsunami</option>
-        <option value="Building Collapse">Building Collapse</option>
-        <option value="Chemical Leak">Chemical Leak</option>
+        {% for disaster in supported_disaster_types %}
+        <option value="{{ disaster }}" {% if loop.first %}selected{% endif %}>{{ disaster }}</option>
+        {% endfor %}
       </select>
     </div>
 

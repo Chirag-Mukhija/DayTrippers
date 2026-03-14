@@ -36,6 +36,14 @@ SAFE_ZONES: List[SafeZone] = [
     SafeZone("sz-3", "Demo Safe Zone C", 12.9688, 77.5889),
 ]
 
+# Keep this list aligned with offline wiki disaster entries available in the client.
+SUPPORTED_DISASTER_TYPES: List[str] = [
+    "Earthquake",
+    "Flood",
+    "Tsunami",
+    "Wildfire",
+]
+
 # Live in-memory state for the demo session.
 users_by_id: Dict[str, dict] = {}
 users_by_sid: Dict[str, str] = {}
@@ -183,7 +191,10 @@ def broadcast_flashlight_status() -> None:
 
 @app.get("/")
 def index():
-    return render_template("admin.html")
+    return render_template(
+        "admin.html",
+        supported_disaster_types=SUPPORTED_DISASTER_TYPES,
+    )
 
 
 @app.get("/health")
@@ -207,8 +218,10 @@ def admin_state():
 @app.post("/admin/trigger")
 def trigger_disaster():
     body = request.get_json(silent=True) or {}
+    incoming_type = str(body.get("type", "Earthquake"))
+    disaster_type = incoming_type if incoming_type in SUPPORTED_DISASTER_TYPES else SUPPORTED_DISASTER_TYPES[0]
     payload = {
-        "type": body.get("type", "Earthquake"),
+        "type": disaster_type,
         "countdown_s": int(body.get("countdown_s", 20)),
         "timestamp": int(time.time()),
     }
